@@ -1,0 +1,101 @@
+.ingredients-page {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 32px 20px 100px;
+}
+
+.ingredients-title {
+    font-size: 24px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.ingredients-subtitle {
+    font-size: 14px;
+    color: #888;
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.ingredients-loading {
+    text-align: center;
+    padding: 60px 0;
+    color: #888;
+}
+
+.ingredient-group {
+    margin-bottom: 28px;
+}
+
+.ingredient-group-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 12px;
+    padding-left: 4px;
+    border-left: 4px solid #4caf50;
+}
+
+.ingredient-group-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.ingredient-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: 1px solid #ddd;
+    background-color: #fff;
+    color: #555;
+    font-size: 14px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease-in-out;
+}
+
+.ingredient-toggle:hover {
+    border-color: #4caf50;
+}
+
+.ingredient-toggle.owned {
+    background-color: #4caf50;
+    border-color: #4caf50;
+    color: #fff;
+}
+
+.ingredient-toggle input {
+    display: none;
+}
+
+.ingredients-footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 16px 20px;
+    background: linear-gradient(to top, #fff 70%, transparent);
+    display: flex;
+    justify-content: center;
+}
+
+.ingredients-submit-btn {
+    width: 100%;
+    max-width: 680px;
+    padding: 14px;
+    border: none;
+    border-radius: 10px;
+    background-color: #4caf50;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ingredients-submit-btn:hover {
+    background-color: #43a047;
+}
