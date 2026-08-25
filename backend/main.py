@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from database import engine, Base
 from model.ingredients import Ingredients
-from router.ingredients import router
+from model.category import Category
+from router.ingredients import router as ingredient_router
+from router.category import router as category_router
 from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI()
 
@@ -16,5 +18,6 @@ app.add_middleware(
 def health():
     return {"msg":"health check"}
 
-app.include_router(router)
+app.include_router(ingredient_router)
+app.include_router(category_router)
 Base.metadata.create_all(bind=engine)
