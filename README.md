@@ -35,21 +35,93 @@
 [사용자 최종 응답] "만들래요" / "안 할래요"
 ```
 
-## 기술 스택 (예정)
+## 기술 스택
 
 - **Agent Orchestration**: LangGraph
-- **LLM**: (모델 확정 전 - 예: 미정 )
-- **Vector DB**: (Chroma 등 확정 전)
-- **DB (재료/유저 데이터)**: MySQL (개인 프로젝트 규모 고려)
-- **Backend**: (FastAPI )
-- **Frontend**: (Node.js)
+- **LLM**: 미정
+- **Vector DB**: Chroma (예정)
+- **DB (재료/유저 데이터)**: MySQL
+- **Backend**: FastAPI
+- **Frontend**: React (Node.js)
 
-## State 스키마 (초안)
+---
+
+## DB 테이블 구조
+
+로그인 없는 개인용 로컬 서비스 기준. 재료 하나(row)에 보유 여부(`owned`)를 바로 저장하는 단일 테이블 구조.
 
 ```python
+class Ingredients(Base):
+    __tablename__ = "ingredients"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    category = Column(String(100), nullable=False)
+    type = Column(String(100), nullable=False)
+    owned = Column(Boolean, default=False)
+```
+
+
+### 레시피 원본 문서 (Vector DB, MySQL 아님)
+
+MySQL이 아니라 Chroma 등 벡터DB에 별도 저장. 필드 구조는 아래 "레시피 문서 설계" 참고.
+
+---
+
+## API 명세 (FastAPI)
+
+### 재료 관련
+
+| Method | Endpoint | 설명 |
+|---|---|---|
+| GET | `/ingredients` | 전체 재료 목록 조회 (type별 그룹핑해서 반환 권장) |
+| PATCH | `/ingredients/{id}` | 특정 재료의 `owned` 토글 |
+| GET | `/ingredients/owned` | 보유 중(`owned=True`)인 재료만 조회 |
+
+**`PATCH /ingredients/{id}` 요청 예시**
+```json
+{ "owned": true }
+```
+
+### 카테고리 관련
+
+| Method | Endpoint | 설명 |
+|---|---|---|
+| GET | `/categories` | 선택 가능한 카테고리 목록 (한식/중식/양식, 면류/밥류 등 고정값이면 하드코딩도 무방) |
+
+### 레시피 생성 파이프라인
+
+파이프라인 전체를 하나의 엔드포인트로 묶을지, 단계별로 나눌지는 프론트 로딩 UI 구현 방식에 따라 결정.
+
+**옵션 A: 단일 엔드포인트 (동기, 서버가 전체 그래프 실행 후 최종 결과만 반환)**
+
+| Method | Endpoint | 설명 |
+|---|---|---|
+| POST | `/recipe/generate` | 보유 재료 + 카테고리로 전체 파이프라인 실행, 최종 레시피+점수 반환 |
+
+```json
+// Request
+{ "category": { "cuisine": "양식", "type": "면류" } }
+
+// Response
+{
+  "status": "done",
+  "menu": "토마토파스타",
+  "recipe": { "ingredients": [...], "steps": "..." },
+  "substitutions": { "생크림": "우유+버터" },
+  "score": 8.2,
+  "feedback": { "issues": [], "suggestions": [] }
+}
+```
+
+## LangGraph State 스키마 (예상)
+
+```python
+from typing import TypedDict
+
 class RecipeState(TypedDict):
     user_inventory: list[str]        # 보유 재료
-    category_filter: dict            # {"cuisine": "양식", "type": "면류"}
+    category_filter: dict            # {"cuisine": "양식", "dish_type": "면류"}
 
     matched_menu: dict               # RAG 검색으로 확정된 메뉴/레시피
     substitutions: dict              # 확정된 대체 재료 매핑
@@ -61,6 +133,8 @@ class RecipeState(TypedDict):
     status: str                      # "checking_ingredients" / "generating" /
                                       # "reviewing" / "done" / "no_candidate"
 ```
+
+---
 
 ## 데이터 설계
 
@@ -80,7 +154,7 @@ class RecipeState(TypedDict):
 | `steps` | 조리 순서 (자유 텍스트) |
 
 자유 텍스트로 통째로 저장하지 않고 필드별로 구조화하여, 필요한 정보만 선택적으로 검색하고 할루시네이션 위험을 줄임.
-또한 정보 검색 시 불필요한 낭비를 줄임 (ex) 사용자가 맵기를 선택 안한다면 "spice_level_table" 필드를 조회 안함
+또한 정보 검색 시 불필요한 낭비를 줄임 (예: 사용자가 맵기를 선택 안 한다면 `spice_level_table` 필드를 조회 안 함).
 
 ## 역할 분리 원칙
 
@@ -99,14 +173,18 @@ class RecipeState(TypedDict):
 - 미식가 평가 후 무제한 재시도 → 1회로 제한
 - 메뉴판 이미지 인식(멀티모달)
 - 사용자 식단 히스토리 기반 개인화
+- SSE 기반 단계별 진행상황 스트리밍 (`/recipe/generate/stream`)
+- `recipe_sessions` 히스토리 저장
 
 ## To-Do
 
-- [ ] 재료 카테고리 태깅 테이블 설계 및 시드 데이터 작성
+- [x] 재료 카테고리 태깅 테이블 설계 및 시드 데이터 작성
+- [ ] `GET /ingredients`, `PATCH /ingredients/{id}` API 구현
 - [ ] 레시피 문서 5~10개 작성 (양식/한식/중식 각 2~3개, 커스터마이징 옵션 포함)
 - [ ] 벡터 DB 구축 및 카테고리 필터 검색 테스트
 - [ ] 요리사 에이전트 프롬프트 설계
 - [ ] 미식가 에이전트 프롬프트 설계 (score/issues/suggestions 구조화 출력)
 - [ ] LangGraph 그래프 구성 (노드/조건부 엣지)
-- [ ] 토글 UI 및 결과 표시 화면 구현
+- [ ] `POST /recipe/generate` 엔드포인트 구현
+- [ ] 토글 UI 및 결과 표시 화면 구현 (React)
 - [ ] 엔드투엔드 테스트 (재료 부족 케이스, 저품질 재생성 케이스 포함)
