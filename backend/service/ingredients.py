@@ -7,8 +7,11 @@ class IngredientService:
 
 
     @staticmethod
-    def get_ingredients():
-        pass
+    def get_ingredients(db:Session):
+        result = IngredientCrud.get_ingredients(db)
+        if result is None :
+            raise HTTPException(status_code=404, detail= "Error: 재료 전체 리스트가 로드되지 않음")
+        return result
 
 
     @staticmethod

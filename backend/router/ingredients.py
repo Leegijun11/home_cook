@@ -8,8 +8,8 @@ router = APIRouter(prefix="/ingredient")
 
 
 @router.get("/")
-def get_ingredienets():
-    pass
+def get_ingredients(db:Session=Depends(get_db)):
+    return IngredientService.get_ingredients(db)
 
 
 

@@ -6,8 +6,9 @@ from model.ingredients import Ingredients
 class IngredientCrud:
 
     @staticmethod
-    def get_ingredients():
-        pass
+    def get_ingredients(db:Session):
+        result = db.execute(select(Ingredients))
+        return result.scalars().all()
 
 
     @staticmethod
