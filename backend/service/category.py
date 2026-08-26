@@ -10,6 +10,7 @@ class CategoryService:
         result = CategoryCrud.post_category(category, db)
         if result is None:
             raise HTTPException(status_code=404, detail="저장하려고 고른 카테고리가 없음")
+        return result
 
 
     @staticmethod
@@ -17,5 +18,4 @@ class CategoryService:
         result = CategoryCrud.get_category(category_id,db)
         if result is None:
             raise HTTPException(status_code=404, detail="저장된 카테고리가 하나가 아니거나, 없어서 가져오지 못함")
-
-        
+        return result

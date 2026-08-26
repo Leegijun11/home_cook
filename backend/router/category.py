@@ -12,6 +12,6 @@ def post_category(category:CategorySelect, db:Session=Depends(get_db)):
     return CategoryService.post_category(category,db)
 
 
-@router.get("/{id}")
+@router.get("/{category_id}")
 def get_category(category_id:int, db:Session=Depends(get_db)):
     return CategoryService.get_category(category_id,db)

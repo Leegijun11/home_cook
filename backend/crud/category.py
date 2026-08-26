@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from model.category import Category
-from schema.ingredients import CategorySelect
+from schema.category import CategorySelect
 
 class CategoryCrud:
 
