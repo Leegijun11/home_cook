@@ -8,8 +8,13 @@ class CategoryCrud:
 
     @staticmethod
     def post_category(category:CategorySelect, db:Session):
-        user_category = Category(cuisine=category.cuisine, dish_type=category.dish_type)
-        db.add(user_category)
+        user_category = db.execute(select(Category)).scalars().first()
+        if user_category is None:
+            user_category = Category(cuisine=category.cuisine, dish_type=category.dish_type)
+            db.add(user_category)
+        else:
+            user_category.cuisine = category.cuisine
+            user_category.dish_type = category.dish_type
         db.commit()
         db.refresh(user_category)
         return user_category
