@@ -4,6 +4,7 @@ from model.ingredients import Ingredients
 from model.category import Category
 from router.ingredients import router as ingredient_router
 from router.category import router as category_router
+from router.recipe import router as recipe_router
 from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI()
 
@@ -20,4 +21,5 @@ def health():
 
 app.include_router(ingredient_router)
 app.include_router(category_router)
+app.include_router(recipe_router)
 Base.metadata.create_all(bind=engine)

@@ -12,6 +12,12 @@ class IngredientCrud:
 
 
     @staticmethod
+    def get_owned_ingredients(db:Session):
+        result = db.execute(select(Ingredients).where(Ingredients.owned == True))
+        return result.scalars().all()
+
+
+    @staticmethod
     def toggle_ingredient(id:int, owned:bool, db:Session):
         result = db.execute(select(Ingredients).where(Ingredients.id==id))
         ingredient = result.scalar_one_or_none()
