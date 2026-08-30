@@ -15,12 +15,10 @@ COOK_SYSTEM_PROMPT = (
     "일반적인 조리 지식을 활용해서 훨씬 더 구체적으로 새로 써. 불 세기(센 불/중불/약불), 대략적인 "
     "조리 시간, 재료 상태 변화(예: 양파가 투명해질 때까지, 표면이 노릇해질 때까지, 국물이 자작해질 "
     "때까지)를 최소 두 군데 이상 포함해.\n"
-    "- [필수 분량]으로 표시된 재료와 수치는 절대 임의로 바꾸거나 뭉뚱그리지 마. steps 문장 안에서 그 "
-    "재료가 등장하는 자리에 반드시 '재료명 + 수치'를 그대로 적어. ingredients 배열에만 적고 steps "
-    "문장에는 수치를 빼는 것은 금지야.\n"
-    '- 금지 표현 예시: "매운맛을 낸다", "매콤하게 볶는다", "고춧가루를 넣어 마무리한다" (수치 없음)\n'
-    '- 올바른 예시: "고추장 2큰술과 고춧가루 1큰술을 넣어 매운맛을 낸다"\n'
-    "- [필수 분량]이 없는 재료는 기본 레시피의 표현을 그대로 유지해도 돼.\n"
+    "- [필수 재료](맵기 단계별로 들어가는 재료)는 steps 안에 반드시 이름이 등장해야 해. 정확한 분량까지 "
+    "적을 필요는 없어 — '고춧가루를 넣어 매운맛을 낸다'처럼 자연스럽게 언급만 하면 충분해.\n"
+    "- [필수 분량](굽기 단계별 시간/온도)은 절대 임의로 바꾸거나 뭉뚱그리지 마. steps 문장 안에 그 "
+    "수치를 그대로 적어.\n"
     "- [대체 재료]가 주어지면 그건 다른 규칙보다 우선이야. 원래 재료 이름은 ingredients와 steps 어디에도 "
     "단 한 글자도 남기지 말고, 전부 대체 재료 이름으로 바꿔서 써.\n"
     "- steps는 처음부터 끝까지 자연스럽게 이어지는 하나의 조리 순서여야 해. 같은 내용이나 비슷한 문장을 "
@@ -52,31 +50,35 @@ class RecipeState(TypedDict):
     substitutions: dict[str, str]
     generated_recipe: dict
     critic_feedback: dict
+    missing_ingredients: list[str]
     missing_amounts: list[str]
     substitution_issues: list[str]
     retry_done: bool
 
 
-def _required_overrides(recipe: dict, spice_level: Optional[str], doneness: Optional[str]):
-    overrides = {}
-    if spice_level:
-        overrides.update((recipe.get("spice_level_table") or {}).get(spice_level, {}))
-    if doneness:
-        overrides.update((recipe.get("doneness_table") or {}).get(doneness, {}))
-    return overrides
+def _spice_overrides(recipe: dict, spice_level: Optional[str]):
+    if not spice_level:
+        return {}
+    return (recipe.get("spice_level_table") or {}).get(spice_level, {})
+
+
+def _doneness_overrides(recipe: dict, doneness: Optional[str]):
+    if not doneness:
+        return {}
+    return (recipe.get("doneness_table") or {}).get(doneness, {})
 
 
 def _required_amounts_text(recipe: dict, spice_level: Optional[str], doneness: Optional[str]):
     lines = []
 
-    if spice_level:
-        overrides = (recipe.get("spice_level_table") or {}).get(spice_level, {})
-        override_text = ", ".join(f"{name} {amount}" for name, amount in overrides.items())
-        lines += [f"선택한 맵기 단계: {spice_level}", f"[필수 분량] {override_text}"]
+    spice_overrides = _spice_overrides(recipe, spice_level)
+    if spice_overrides:
+        override_text = ", ".join(f"{name} {amount}" for name, amount in spice_overrides.items())
+        lines += [f"선택한 맵기 단계: {spice_level}", f"[필수 재료] {override_text}"]
 
-    if doneness:
-        overrides = (recipe.get("doneness_table") or {}).get(doneness, {})
-        override_text = ", ".join(f"{name} {amount}" for name, amount in overrides.items())
+    doneness_overrides = _doneness_overrides(recipe, doneness)
+    if doneness_overrides:
+        override_text = ", ".join(f"{name} {amount}" for name, amount in doneness_overrides.items())
         lines += [f"선택한 굽기 단계: {doneness}", f"[필수 분량] {override_text}"]
 
     return "\n".join(lines)
@@ -99,13 +101,25 @@ def _amount_tokens(amount: str):
     return tokens or [amount]
 
 
-def _missing_required_amounts(recipe: dict, spice_level: Optional[str], doneness: Optional[str], steps: Optional[str]):
-    """[필수 분량]의 숫자가 steps 문장 안에 실제로 들어있는지 코드로 직접 검사.
+def _missing_required_ingredients(recipe: dict, spice_level: Optional[str], steps: Optional[str]):
+    """맵기 단계의 [필수 재료] 이름이 steps에 언급됐는지만 확인 (정확한 분량은 요구하지 않음).
 
+    스터디용 프로젝트라 "고춧가루 2.5큰술"처럼 토씨까지 맞추는 건 과한 엄격함이라 판단해서,
+    이 항목은 재료 이름이 등장하는지만 결정론적으로 확인한다.
+    """
+    overrides = _spice_overrides(recipe, spice_level)
+    steps = steps or ""
+    return [name for name, amount in overrides.items() if amount != "0" and name not in steps]
+
+
+def _missing_required_amounts(recipe: dict, doneness: Optional[str], steps: Optional[str]):
+    """굽기 단계의 [필수 분량] 숫자가 steps 문장 안에 실제로 들어있는지 코드로 직접 검사.
+
+    시간/온도는 재료 언급과 달리 실제 조리 결과에 영향을 주는 정보라 계속 정확하게 확인한다.
     미식가 LLM이 이 판단을 자주 헛짚어서(있는데 없다고 하거나 반대로) 여기만 떼어내
     문자열 포함 여부로 결정론적으로 확인한다.
     """
-    overrides = _required_overrides(recipe, spice_level, doneness)
+    overrides = _doneness_overrides(recipe, doneness)
     steps = steps or ""
     missing = []
     for name, amount in overrides.items():
@@ -155,9 +169,15 @@ def generate_node(state: RecipeState):
         _required_amounts_text(recipe, state["spice_level"], state["doneness"]),
     ])
     generated = _call_llm(COOK_SYSTEM_PROMPT, prompt)
-    missing = _missing_required_amounts(recipe, state["spice_level"], state["doneness"], generated.get("steps"))
+    missing_ingredients = _missing_required_ingredients(recipe, state["spice_level"], generated.get("steps"))
+    missing_amounts = _missing_required_amounts(recipe, state["doneness"], generated.get("steps"))
     sub_issues = _substitution_violations(state.get("substitutions") or {}, generated)
-    return {"generated_recipe": generated, "missing_amounts": missing, "substitution_issues": sub_issues}
+    return {
+        "generated_recipe": generated,
+        "missing_ingredients": missing_ingredients,
+        "missing_amounts": missing_amounts,
+        "substitution_issues": sub_issues,
+    }
 
 
 def critique_node(state: RecipeState):
@@ -183,6 +203,8 @@ def regenerate_node(state: RecipeState):
     recipe = state["recipe"]
 
     mistakes = []
+    if state.get("missing_ingredients"):
+        mistakes.append(f"필수 재료가 문장에서 언급 안 됨: {', '.join(state['missing_ingredients'])}")
     if state.get("missing_amounts"):
         mistakes.append(f"필수 분량이 문장에서 빠짐: {', '.join(state['missing_amounts'])}")
     if state.get("substitution_issues"):
@@ -207,11 +229,13 @@ def regenerate_node(state: RecipeState):
         "\n".join(f"- {mistake}" for mistake in mistakes),
     ])
     generated = _call_llm(COOK_SYSTEM_PROMPT, prompt)
-    missing = _missing_required_amounts(recipe, state["spice_level"], state["doneness"], generated.get("steps"))
+    missing_ingredients = _missing_required_ingredients(recipe, state["spice_level"], generated.get("steps"))
+    missing_amounts = _missing_required_amounts(recipe, state["doneness"], generated.get("steps"))
     sub_issues = _substitution_violations(state.get("substitutions") or {}, generated)
     return {
         "generated_recipe": generated,
-        "missing_amounts": missing,
+        "missing_ingredients": missing_ingredients,
+        "missing_amounts": missing_amounts,
         "substitution_issues": sub_issues,
         "retry_done": True,
     }
@@ -220,9 +244,12 @@ def regenerate_node(state: RecipeState):
 def should_retry(state: RecipeState):
     feedback = state["critic_feedback"]
     score_too_low = feedback.get("score", 10) < settings.critic_score_threshold
+    has_missing_ingredients = bool(state.get("missing_ingredients"))
     has_missing_amounts = bool(state.get("missing_amounts"))
     has_substitution_issues = bool(state.get("substitution_issues"))
-    if not state["retry_done"] and (score_too_low or has_missing_amounts or has_substitution_issues):
+    if not state["retry_done"] and (
+        score_too_low or has_missing_ingredients or has_missing_amounts or has_substitution_issues
+    ):
         return "retry"
     return "done"
 
@@ -250,6 +277,7 @@ def run(recipe: dict, spice_level: Optional[str], doneness: Optional[str], subst
         "substitutions": substitutions or {},
         "generated_recipe": {},
         "critic_feedback": {},
+        "missing_ingredients": [],
         "missing_amounts": [],
         "substitution_issues": [],
         "retry_done": False,
@@ -263,9 +291,13 @@ def run(recipe: dict, spice_level: Optional[str], doneness: Optional[str], subst
     if sub_issues:
         issues = [f"대체 재료 미반영: {', '.join(sub_issues)}"] + issues
 
-    missing = final_state.get("missing_amounts") or []
-    if missing:
-        issues = [f"필수 분량 누락: {', '.join(missing)}"] + issues
+    missing_amounts = final_state.get("missing_amounts") or []
+    if missing_amounts:
+        issues = [f"필수 분량 누락: {', '.join(missing_amounts)}"] + issues
+
+    missing_ingredients = final_state.get("missing_ingredients") or []
+    if missing_ingredients:
+        issues = [f"필수 재료 언급 안 됨: {', '.join(missing_ingredients)}"] + issues
 
     feedback["issues"] = issues
     return final_state["generated_recipe"], feedback
