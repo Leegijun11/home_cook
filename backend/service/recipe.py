@@ -11,9 +11,17 @@ from fastapi import HTTPException
 client = OpenAI(api_key=settings.openai_api_key)
 
 SYSTEM_PROMPT = (
-    "너는 자취생을 위한 요리사 에이전트야. 주어진 기본 레시피와 사용자가 고른 맵기/굽기 단계를 "
-    "반영해서 최종 레시피를 작성해. 반드시 아래 JSON 형식으로만 응답해:\n"
-    '{"menu": "메뉴명", "ingredients": ["재료1", "재료2"], "steps": "조리 순서 설명"}'
+    "너는 자취생을 위한 요리사 에이전트야. 주어진 기본 레시피에 사용자가 고른 맵기/굽기 단계를 반영해서 "
+    "최종 레시피를 작성해.\n\n"
+    "규칙:\n"
+    "- [필수 분량]으로 표시된 재료와 수치는 절대 임의로 바꾸거나 뭉뚱그리지 마. steps 문장 안에서 그 "
+    "재료가 등장하는 자리에 반드시 '재료명 + 수치'를 그대로 적어. ingredients 배열에만 적고 steps "
+    "문장에는 수치를 빼는 것은 금지야.\n"
+    '- 금지 표현 예시: "매운맛을 낸다", "매콤하게 볶는다", "고춧가루를 넣어 마무리한다" (수치 없음)\n'
+    '- 올바른 예시: "고추장 2큰술과 고춧가루 1큰술을 넣어 매운맛을 낸다"\n'
+    "- [필수 분량]이 없는 재료는 기본 레시피의 표현을 그대로 유지해도 돼.\n"
+    "- 반드시 아래 JSON 형식으로만 응답해. 다른 설명, 마크다운, 코드블록은 포함하지 마.\n"
+    '{"menu": "메뉴명", "ingredients": ["재료명 또는 재료명+분량", ...], "steps": "조리 순서 설명"}'
 )
 
 
@@ -59,11 +67,13 @@ class RecipeService:
 
         if spice_level:
             overrides = (recipe.get("spice_level_table") or {}).get(spice_level, {})
-            lines += ["", f"선택한 맵기 단계: {spice_level}", f"맵기 단계별 재료량 조정: {overrides}"]
+            override_text = ", ".join(f"{name} {amount}" for name, amount in overrides.items())
+            lines += ["", f"선택한 맵기 단계: {spice_level}", f"[필수 분량] {override_text}"]
 
         if doneness:
             overrides = (recipe.get("doneness_table") or {}).get(doneness, {})
-            lines += ["", f"선택한 굽기 단계: {doneness}", f"굽기 단계별 조정: {overrides}"]
+            override_text = ", ".join(f"{name} {amount}" for name, amount in overrides.items())
+            lines += ["", f"선택한 굽기 단계: {doneness}", f"[필수 분량] {override_text}"]
 
         return "\n".join(lines)
 
@@ -86,6 +96,7 @@ class RecipeService:
         try:
             completion = client.chat.completions.create(
                 model=settings.openai_model,
+                temperature=0,
                 response_format={"type": "json_object"},
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
