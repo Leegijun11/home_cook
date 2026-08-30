@@ -57,6 +57,13 @@
     cursor: not-allowed;
 }
 
+.result-substitution-note {
+    text-align: center;
+    font-size: 13px;
+    color: #888;
+    margin: -16px 0 24px;
+}
+
 .result-section {
     margin-bottom: 28px;
 }

@@ -49,6 +49,7 @@ export default function Result() {
             recipe_ref: candidate.recipe_ref,
             spice_level: spiceLevel,
             doneness: doneness,
+            substitutions: candidate.substitutions,
         })
             .then((data) => {
                 setRecipe(data)
@@ -128,6 +129,15 @@ export default function Result() {
     return (
         <div className="result-page">
             <h1 className="result-title">{recipe?.menu ?? candidate?.menu}</h1>
+
+            {candidate?.substitutions && Object.keys(candidate.substitutions).length > 0 && (
+                <p className="result-substitution-note">
+                    {Object.entries(candidate.substitutions)
+                        .map(([original, replacement]) => `${original} → ${replacement}`)
+                        .join(", ")}{" "}
+                    대체 재료로 만들었어요
+                </p>
+            )}
 
             <div className="result-section">
                 <h3 className="result-section-title">재료</h3>
