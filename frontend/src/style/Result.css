@@ -8,7 +8,7 @@
     font-size: 24px;
     font-weight: 700;
     text-align: center;
-    margin-bottom: 8px;
+    margin-bottom: 28px;
 }
 
 .result-loading {
@@ -55,4 +55,43 @@
 .result-submit-btn:disabled {
     background-color: #ccc;
     cursor: not-allowed;
+}
+
+.result-section {
+    margin-bottom: 28px;
+}
+
+.result-section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 12px;
+    padding-left: 4px;
+    border-left: 4px solid #4caf50;
+}
+
+.result-ingredients {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.result-ingredient-chip {
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: 1px solid #ddd;
+    background-color: #fff;
+    color: #555;
+    font-size: 14px;
+}
+
+.result-steps {
+    font-size: 15px;
+    line-height: 1.7;
+    color: #333;
+    white-space: pre-wrap;
+    word-break: break-word;
 }

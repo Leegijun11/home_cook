@@ -127,8 +127,23 @@ export default function Result() {
 
     return (
         <div className="result-page">
-            <h1>{recipe?.menu ?? candidate?.menu}</h1>
-            <pre>{JSON.stringify(recipe, null, 2)}</pre>
+            <h1 className="result-title">{recipe?.menu ?? candidate?.menu}</h1>
+
+            <div className="result-section">
+                <h3 className="result-section-title">재료</h3>
+                <ul className="result-ingredients">
+                    {(recipe?.ingredients ?? []).map((ingredient) => (
+                        <li key={ingredient} className="result-ingredient-chip">
+                            {ingredient}
+                        </li>
+                    ))}
+                </ul>
+            </div>
+
+            <div className="result-section">
+                <h3 className="result-section-title">조리 순서</h3>
+                <p className="result-steps">{recipe?.steps}</p>
+            </div>
         </div>
     )
 }
