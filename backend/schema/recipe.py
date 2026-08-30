@@ -25,9 +25,18 @@ class GenerateRequest(BaseModel):
     doneness: Optional[str] = None
 
 
+# 미식가 평가
+class CriticFeedback(BaseModel):
+    score: float
+    issues: list[str] = []
+    suggestions: list[str] = []
+
+
 # 레시피 생성 응답
 class GenerateResponse(BaseModel):
     status: str  # "done"
     menu: str
     ingredients: list[str]
     steps: str
+    score: Optional[float] = None
+    feedback: Optional[CriticFeedback] = None
