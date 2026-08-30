@@ -144,6 +144,34 @@ export default function Result() {
                 <h3 className="result-section-title">조리 순서</h3>
                 <p className="result-steps">{recipe?.steps}</p>
             </div>
+
+            <div className="result-section">
+                <h3 className="result-section-title">미식가 평가</h3>
+                {recipe?.score != null && <p className="result-score">{recipe.score} / 10</p>}
+                {recipe?.feedback?.comment && <p className="result-comment">{recipe.feedback.comment}</p>}
+
+                {recipe?.feedback?.issues?.length > 0 && (
+                    <div className="result-feedback-group">
+                        <p className="result-feedback-label">문제점</p>
+                        <ul className="result-feedback-list">
+                            {recipe.feedback.issues.map((issue) => (
+                                <li key={issue}>{issue}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+
+                {recipe?.feedback?.suggestions?.length > 0 && (
+                    <div className="result-feedback-group">
+                        <p className="result-feedback-label">개선 제안</p>
+                        <ul className="result-feedback-list">
+                            {recipe.feedback.suggestions.map((suggestion) => (
+                                <li key={suggestion}>{suggestion}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+            </div>
         </div>
     )
 }
