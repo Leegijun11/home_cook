@@ -1,4 +1,5 @@
 import json
+import re
 from typing import TypedDict, Optional
 from openai import OpenAI
 from langgraph.graph import StateGraph, END
@@ -25,8 +26,10 @@ CRITIC_SYSTEM_PROMPT = (
     "있을지 평가해.\n\n"
     "평가 기준:\n"
     "- 조리 순서가 구체적이고 따라 하기 쉬운가\n"
-    "- [필수 분량]이 주어졌다면 그 수치가 steps 문장 안에 정확히 반영됐는가 (빠졌거나 뭉뚱그렸으면 감점)\n"
-    "- 재료 목록과 조리 순서가 서로 모순되지 않는가\n\n"
+    "- 재료 목록과 조리 순서가 서로 모순되지 않는가\n"
+    "- 전체적으로 맛있게 완성될 것 같은가\n\n"
+    "참고: 맵기/굽기 단계별 필수 분량이 정확히 반영됐는지는 이미 코드로 별도 검증하니 너는 신경 쓰지 "
+    "않아도 돼.\n\n"
     "반드시 아래 JSON 형식으로만 응답해. 다른 설명은 포함하지 마.\n"
     '{"score": 0에서 10 사이 숫자, "comment": "점수를 준 이유를 한두 문장으로", '
     '"issues": ["문제점", ...], "suggestions": ["개선 제안", ...]}\n'
@@ -40,7 +43,17 @@ class RecipeState(TypedDict):
     doneness: Optional[str]
     generated_recipe: dict
     critic_feedback: dict
+    missing_amounts: list[str]
     retry_done: bool
+
+
+def _required_overrides(recipe: dict, spice_level: Optional[str], doneness: Optional[str]):
+    overrides = {}
+    if spice_level:
+        overrides.update((recipe.get("spice_level_table") or {}).get(spice_level, {}))
+    if doneness:
+        overrides.update((recipe.get("doneness_table") or {}).get(doneness, {}))
+    return overrides
 
 
 def _required_amounts_text(recipe: dict, spice_level: Optional[str], doneness: Optional[str]):
@@ -57,6 +70,31 @@ def _required_amounts_text(recipe: dict, spice_level: Optional[str], doneness: O
         lines += [f"선택한 굽기 단계: {doneness}", f"[필수 분량] {override_text}"]
 
     return "\n".join(lines)
+
+
+def _amount_tokens(amount: str):
+    """분량 문자열에서 숫자가 포함된 조각만 뽑아낸다.
+
+    예: "한 면당 4분 이상" -> ["4분"], "60~63도" -> ["60~63도"]. 요리사 에이전트가
+    "한 면당"처럼 곁말은 바꿔 쓰더라도 실제 숫자(분/도/큰술 등)만 있으면 충분하다고 본다.
+    """
+    tokens = re.findall(r"\d+[^\s,]*", amount)
+    return tokens or [amount]
+
+
+def _missing_required_amounts(recipe: dict, spice_level: Optional[str], doneness: Optional[str], steps: Optional[str]):
+    """[필수 분량]의 숫자가 steps 문장 안에 실제로 들어있는지 코드로 직접 검사.
+
+    미식가 LLM이 이 판단을 자주 헛짚어서(있는데 없다고 하거나 반대로) 여기만 떼어내
+    문자열 포함 여부로 결정론적으로 확인한다.
+    """
+    overrides = _required_overrides(recipe, spice_level, doneness)
+    steps = steps or ""
+    missing = []
+    for name, amount in overrides.items():
+        if not all(token in steps for token in _amount_tokens(amount)):
+            missing.append(f"{name} {amount}")
+    return missing
 
 
 def _call_llm(system_prompt: str, user_prompt: str):
@@ -85,7 +123,8 @@ def generate_node(state: RecipeState):
         _required_amounts_text(recipe, state["spice_level"], state["doneness"]),
     ])
     generated = _call_llm(COOK_SYSTEM_PROMPT, prompt)
-    return {"generated_recipe": generated}
+    missing = _missing_required_amounts(recipe, state["spice_level"], state["doneness"], generated.get("steps"))
+    return {"generated_recipe": generated, "missing_amounts": missing}
 
 
 def critique_node(state: RecipeState):
@@ -96,8 +135,6 @@ def critique_node(state: RecipeState):
         "",
         "조리 순서:",
         generated.get("steps") or "",
-        "",
-        _required_amounts_text(state["recipe"], state["spice_level"], state["doneness"]),
     ])
     feedback = _call_llm(CRITIC_SYSTEM_PROMPT, prompt)
     return {"critic_feedback": feedback}
@@ -122,12 +159,15 @@ def regenerate_node(state: RecipeState):
         f"개선 제안: {', '.join(feedback.get('suggestions') or [])}",
     ])
     generated = _call_llm(COOK_SYSTEM_PROMPT, prompt)
-    return {"generated_recipe": generated, "retry_done": True}
+    missing = _missing_required_amounts(recipe, state["spice_level"], state["doneness"], generated.get("steps"))
+    return {"generated_recipe": generated, "missing_amounts": missing, "retry_done": True}
 
 
 def should_retry(state: RecipeState):
     feedback = state["critic_feedback"]
-    if feedback.get("score", 10) < settings.critic_score_threshold and not state["retry_done"]:
+    score_too_low = feedback.get("score", 10) < settings.critic_score_threshold
+    has_missing_amounts = bool(state.get("missing_amounts"))
+    if not state["retry_done"] and (score_too_low or has_missing_amounts):
         return "retry"
     return "done"
 
@@ -154,7 +194,14 @@ def run(recipe: dict, spice_level: Optional[str], doneness: Optional[str]):
         "doneness": doneness,
         "generated_recipe": {},
         "critic_feedback": {},
+        "missing_amounts": [],
         "retry_done": False,
     }
     final_state = recipe_graph.invoke(initial_state)
-    return final_state["generated_recipe"], final_state["critic_feedback"]
+
+    feedback = dict(final_state["critic_feedback"])
+    missing = final_state.get("missing_amounts") or []
+    if missing:
+        feedback["issues"] = [f"필수 분량 누락: {', '.join(missing)}"] + list(feedback.get("issues") or [])
+
+    return final_state["generated_recipe"], feedback
