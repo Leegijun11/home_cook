@@ -11,14 +11,20 @@ COOK_SYSTEM_PROMPT = (
     "너는 자취생을 위한 요리사 에이전트야. 주어진 기본 레시피에 사용자가 고른 맵기/굽기 단계를 반영해서 "
     "최종 레시피를 작성해.\n\n"
     "규칙:\n"
+    "- '기본 조리방법'은 재료와 순서의 큰 흐름만 참고하고 그대로 베끼지 마. 실제 steps는 네가 아는 "
+    "일반적인 조리 지식을 활용해서 훨씬 더 구체적으로 새로 써. 불 세기(센 불/중불/약불), 대략적인 "
+    "조리 시간, 재료 상태 변화(예: 양파가 투명해질 때까지, 표면이 노릇해질 때까지, 국물이 자작해질 "
+    "때까지)를 최소 두 군데 이상 포함해.\n"
     "- [필수 분량]으로 표시된 재료와 수치는 절대 임의로 바꾸거나 뭉뚱그리지 마. steps 문장 안에서 그 "
     "재료가 등장하는 자리에 반드시 '재료명 + 수치'를 그대로 적어. ingredients 배열에만 적고 steps "
     "문장에는 수치를 빼는 것은 금지야.\n"
     '- 금지 표현 예시: "매운맛을 낸다", "매콤하게 볶는다", "고춧가루를 넣어 마무리한다" (수치 없음)\n'
     '- 올바른 예시: "고추장 2큰술과 고춧가루 1큰술을 넣어 매운맛을 낸다"\n'
     "- [필수 분량]이 없는 재료는 기본 레시피의 표현을 그대로 유지해도 돼.\n"
-    "- [대체 재료]가 주어지면 원래 재료 대신 그 대체 재료 이름을 ingredients와 steps에 사용해. "
-    "원래 재료 이름은 결과에 남기지 마.\n"
+    "- [대체 재료]가 주어지면 그건 다른 규칙보다 우선이야. 원래 재료 이름은 ingredients와 steps 어디에도 "
+    "단 한 글자도 남기지 말고, 전부 대체 재료 이름으로 바꿔서 써.\n"
+    "- steps는 처음부터 끝까지 자연스럽게 이어지는 하나의 조리 순서여야 해. 같은 내용이나 비슷한 문장을 "
+    "두 번 반복해서 쓰지 마.\n"
     "- 반드시 아래 JSON 형식으로만 응답해. 다른 설명, 마크다운, 코드블록은 포함하지 마.\n"
     '{"menu": "메뉴명", "ingredients": ["재료명 또는 재료명+분량", ...], "steps": "조리 순서 설명"}'
 )
@@ -47,6 +53,7 @@ class RecipeState(TypedDict):
     generated_recipe: dict
     critic_feedback: dict
     missing_amounts: list[str]
+    substitution_issues: list[str]
     retry_done: bool
 
 
@@ -107,6 +114,19 @@ def _missing_required_amounts(recipe: dict, spice_level: Optional[str], doneness
     return missing
 
 
+def _substitution_violations(substitutions: dict, generated: dict):
+    """[대체 재료] 지침이 실제로 지켜졌는지 코드로 직접 검사.
+
+    원본 재료 이름이 아직 남아있거나 대체 재료 이름이 전혀 안 보이면 위반으로 본다.
+    """
+    text = " ".join(generated.get("ingredients") or []) + " " + (generated.get("steps") or "")
+    violations = []
+    for original, replacement in substitutions.items():
+        if original in text or replacement not in text:
+            violations.append(f"{original} → {replacement}")
+    return violations
+
+
 def _call_llm(system_prompt: str, user_prompt: str):
     completion = client.chat.completions.create(
         model=settings.openai_model,
@@ -136,7 +156,8 @@ def generate_node(state: RecipeState):
     ])
     generated = _call_llm(COOK_SYSTEM_PROMPT, prompt)
     missing = _missing_required_amounts(recipe, state["spice_level"], state["doneness"], generated.get("steps"))
-    return {"generated_recipe": generated, "missing_amounts": missing}
+    sub_issues = _substitution_violations(state.get("substitutions") or {}, generated)
+    return {"generated_recipe": generated, "missing_amounts": missing, "substitution_issues": sub_issues}
 
 
 def critique_node(state: RecipeState):
@@ -153,35 +174,55 @@ def critique_node(state: RecipeState):
 
 
 def regenerate_node(state: RecipeState):
+    """생성을 처음부터 다시 한다 (이전 결과물은 프롬프트에 넣지 않음).
+
+    이전 결과 JSON을 그대로 보여주고 "수정해"라고 시켰더니 GPT가 새로 쓰는 대신 비슷한
+    문장을 이어붙이는 경우가 있어서, 대신 "이번엔 이런 실수를 하지 마"라는 주의사항만
+    추가로 얹어 generate_node와 동일하게 완전히 새로 작성하게 한다.
+    """
     recipe = state["recipe"]
-    generated = state["generated_recipe"]
-    feedback = state["critic_feedback"]
+
+    mistakes = []
+    if state.get("missing_amounts"):
+        mistakes.append(f"필수 분량이 문장에서 빠짐: {', '.join(state['missing_amounts'])}")
+    if state.get("substitution_issues"):
+        mistakes.append(f"대체 재료가 제대로 안 바뀜: {', '.join(state['substitution_issues'])}")
+    for issue in (state["critic_feedback"].get("issues") or []):
+        mistakes.append(issue)
+
     prompt = "\n".join([
         f"메뉴: {recipe.get('name')}",
         f"기본 재료: {', '.join(recipe.get('base_ingredients') or [])}",
         f"주 조리도구: {recipe.get('main_tool')}",
         "",
+        "기본 조리방법:",
+        recipe.get("steps") or "",
+        "",
         _substitutions_text(state.get("substitutions") or {}),
         "",
         _required_amounts_text(recipe, state["spice_level"], state["doneness"]),
         "",
-        "이전에 생성한 레시피:",
-        json.dumps(generated, ensure_ascii=False),
-        "",
-        "미식가 피드백 (반드시 반영해서 수정할 것):",
-        f"문제점: {', '.join(feedback.get('issues') or [])}",
-        f"개선 제안: {', '.join(feedback.get('suggestions') or [])}",
+        "[주의] 이전 시도에서 아래 실수가 있었어. 처음부터 새로 하나의 매끄러운 레시피를 "
+        "작성하면서 이 실수를 반드시 피해:",
+        "\n".join(f"- {mistake}" for mistake in mistakes),
     ])
     generated = _call_llm(COOK_SYSTEM_PROMPT, prompt)
     missing = _missing_required_amounts(recipe, state["spice_level"], state["doneness"], generated.get("steps"))
-    return {"generated_recipe": generated, "missing_amounts": missing, "retry_done": True}
+    sub_issues = _substitution_violations(state.get("substitutions") or {}, generated)
+    return {
+        "generated_recipe": generated,
+        "missing_amounts": missing,
+        "substitution_issues": sub_issues,
+        "retry_done": True,
+    }
 
 
 def should_retry(state: RecipeState):
     feedback = state["critic_feedback"]
     score_too_low = feedback.get("score", 10) < settings.critic_score_threshold
     has_missing_amounts = bool(state.get("missing_amounts"))
-    if not state["retry_done"] and (score_too_low or has_missing_amounts):
+    has_substitution_issues = bool(state.get("substitution_issues"))
+    if not state["retry_done"] and (score_too_low or has_missing_amounts or has_substitution_issues):
         return "retry"
     return "done"
 
@@ -210,13 +251,21 @@ def run(recipe: dict, spice_level: Optional[str], doneness: Optional[str], subst
         "generated_recipe": {},
         "critic_feedback": {},
         "missing_amounts": [],
+        "substitution_issues": [],
         "retry_done": False,
     }
     final_state = recipe_graph.invoke(initial_state)
 
     feedback = dict(final_state["critic_feedback"])
+    issues = list(feedback.get("issues") or [])
+
+    sub_issues = final_state.get("substitution_issues") or []
+    if sub_issues:
+        issues = [f"대체 재료 미반영: {', '.join(sub_issues)}"] + issues
+
     missing = final_state.get("missing_amounts") or []
     if missing:
-        feedback["issues"] = [f"필수 분량 누락: {', '.join(missing)}"] + list(feedback.get("issues") or [])
+        issues = [f"필수 분량 누락: {', '.join(missing)}"] + issues
 
+    feedback["issues"] = issues
     return final_state["generated_recipe"], feedback
