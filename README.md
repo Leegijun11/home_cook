@@ -179,8 +179,8 @@ class RecipeState(TypedDict):
 ## To-Do
 
 - [x] 재료 카테고리 태깅 테이블 설계 및 시드 데이터 작성
-- [ ] `GET /ingredients`, `PATCH /ingredients/{id}` API 구현
-- [ ] 레시피 문서 5~10개 작성 (양식/한식/중식 각 2~3개, 커스터마이징 옵션 포함)
+- [x] `GET /ingredients`, `PATCH /ingredients/{id}` API 구현
+- [x] 레시피 문서 5~10개 작성 (양식/한식/중식 각 2~3개, 커스터마이징 옵션 포함)
 - [ ] 벡터 DB 구축 및 카테고리 필터 검색 테스트
 - [ ] 요리사 에이전트 프롬프트 설계
 - [ ] 미식가 에이전트 프롬프트 설계 (score/issues/suggestions 구조화 출력)
