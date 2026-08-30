@@ -35,5 +35,9 @@ __pycache__/
 *.db
 *.sqlite3
 
+# 비밀키 (API 키 등)
+.env
+!.env.example
+
 # OS
 Thumbs.db
