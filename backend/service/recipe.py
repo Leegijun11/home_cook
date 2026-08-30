@@ -19,6 +19,9 @@ class RecipeService:
         candidates = RecipeCrud.find_matching_recipes(category.cuisine, category.dish_type)
 
         for recipe in candidates:
+            if recipe.get("main_tool") not in owned_names:
+                continue
+
             substitutions = RecipeService._resolve_substitutions(recipe, owned_names)
             if substitutions is None:
                 continue
