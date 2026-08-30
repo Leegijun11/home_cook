@@ -1,190 +1,162 @@
-# 자취생 요리 추천 (RAG + Multi-Agent 개인 프로젝트)
+# 자취생 요리 추천 (LLM + Multi-Agent 개인 프로젝트)
 
-집에 있는 재료와 카테고리 선택만으로, AI가 만들 수 있는 메뉴를 스스로 골라 레시피를 생성하고 검증까지 해주는 요리 추천 서비스.
+집에 있는 재료·조리도구와 원하는 요리 종류만 고르면, AI가 만들 수 있는 메뉴를 골라 레시피를 생성하고 스스로 평가까지 해주는 요리 추천 서비스.
+
+## 데모
+
+| 재료·조리도구 선택 | 카테고리 선택 | 레시피 결과 |
+|---|---|---|
+| ![재료 선택](images/ingredients.png) | ![카테고리 선택](images/category.png) | ![결과](images/result.png) |
 
 ## 프로젝트 목적
 
-- RAG를 "단순 검색"이 아니라 **카테고리 필터 + 벡터 검색**으로 의미 있게 활용하는 구조 연습
-- LLM에게 맡길 판단(재료 대체, 레시피 생성, 맛 평가)과 코드로 처리할 로직(재고 대조, 조건 분기)을 명확히 분리
-- 생성 에이전트와 검증 에이전트를 분리한 Multi-Agent 구조로 self-consistency 문제 회피
+- LLM에게 맡길 판단(재료 대체, 레시피 생성, 맛 평가)과 코드로 처리할 로직(재고·도구 대조, 조건 분기, 재시도 여부)을 명확히 분리하는 구조 연습
+- 생성 에이전트와 평가 에이전트를 분리한 Multi-Agent 구조로 self-consistency 문제 회피
 - LangGraph 기반 State 관리 및 조건부 분기(재생성 사이클) 연습
 
 ## 전체 흐름
 
 ```
-[재료 입력 - 토글] (DB 저장)
+[재료 / 조리도구 입력 - 토글] (DB 저장)
         ↓
-[카테고리 선택 - 토글] (한식/중식/양식, 면류/밥류 등)
+[카테고리 선택] (한식/중식/양식 등, 면류/밥류 등)
         ↓
-[RAG 검색] → 카테고리로 필터링된 범위에서 메뉴 후보 1개 확정
+[레시피 후보 확정] POST /recipe/candidate
+   카테고리와 일치하는 레시피 문서 중,
+     - main_tool을 보유하지 않음 → 후보 제외
+     - base_ingredients가 부족해도 substitution_table의 대체품을 보유 → 대체재로 인정
+     - 그래도 부족 → 후보 제외
+   위 조건을 만족하는 첫 번째 메뉴를 후보로 확정 (없으면 "no_candidate")
         ↓
-[재료 확인] (코드: 보유 재료 vs 레시피 필요 재료 대조)
-   부족 재료 있음?
-     ├─ 없음 → 통과
-     └─ 있음 → 대체 가능성 판단 (코드: 카테고리 기반 후보 조회 + LLM: 맛 적합성 판단)
-                 ├─ 대체 가능 → 통과
-                 └─ 대체 불가 → "이 재료로는 어려워요" 안내 후 종료
+[맵기 / 굽기 선택] (필요한 단계가 있고, 그 단계에 필요한 재료를 보유한 경우만 옵션으로 노출)
         ↓
-[요리사 에이전트] → 대체재/맵기 등 반영해 레시피 생성
+[레시피 생성] POST /recipe/generate (LangGraph)
+   요리사 에이전트 → 레시피 생성
         ↓
-[미식가 에이전트] → 점수 + 코멘트(issues, suggestions) 생성
-   점수 < 임계값?
-     ├─ Yes → 1회 재생성 (이전 레시피 + 피드백을 반영해 수정) → 결과 그대로 표시
-     └─ No → 바로 표시
+   코드 검증: 맵기 재료 언급 여부 / 굽기 시간·온도 반영 여부 / 대체재 반영 여부
         ↓
-[사용자 최종 응답] "만들래요" / "안 할래요"
+   미식가 에이전트 → 점수 + comment + issues/suggestions
+        ↓
+   (검증 실패 또는 점수 < 임계값) && 재시도 안 했음?
+     ├─ Yes → 1회 재생성 (이전 결과는 보여주지 않고, 어떤 실수를 피해야 하는지만 알려주고 처음부터 재작성) → 결과 그대로 표시
+     └─ No  → 바로 표시
+        ↓
+[결과 화면] 메뉴 / 재료 / 조리순서 / 대체 재료 안내 / 미식가 평가(점수·코멘트·이슈) 표시
 ```
 
 ## 기술 스택
 
+- **Backend**: FastAPI, SQLAlchemy, MySQL
+- **Frontend**: React (Vite), Axios, React Router
+- **LLM**: OpenAI GPT-3.5-turbo
 - **Agent Orchestration**: LangGraph
-- **LLM**: 미정
-- **Vector DB**: Chroma (예정)
-- **DB (재료/유저 데이터)**: MySQL
-- **Backend**: FastAPI
-- **Frontend**: React (Node.js)
+## 실행 방법
 
----
+### Backend
 
-## DB 테이블 구조
+```bash
+cd backend
+venv\Scripts\activate
+uvicorn main:app --reload
+```
 
-로그인 없는 개인용 로컬 서비스 기준. 재료 하나(row)에 보유 여부(`owned`)를 바로 저장하는 단일 테이블 구조.
+`backend/.env`에 `OPENAI_API_KEY`, `OPENAI_MODEL`(기본 gpt-3.5-turbo)을 설정해야 합니다. MySQL 접속 정보는 `backend/database.py`에 있습니다.
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### 재료 시드 데이터
+
+```bash
+cd backend
+python table.py
+```
+
+`ingredients_seed.csv`를 읽어 DB에 없는 재료만 추가합니다 (재실행해도 중복 삽입되지 않음).
+
+## API 명세
+
+| Method | Endpoint | 설명 |
+|---|---|---|
+| GET | `/ingredient/` | 전체 재료·조리도구 목록 조회 |
+| POST | `/ingredient/{id}` | 특정 재료의 `owned` 토글 |
+| POST | `/category/` | 카테고리(cuisine, dish_type) 선택값 저장 |
+| GET | `/category/{id}` | 저장된 카테고리 조회 |
+| POST | `/recipe/candidate` | 카테고리 + 보유 재료·도구로 레시피 후보 확정 |
+| POST | `/recipe/generate` | 확정된 후보 + 맵기/굽기/대체재로 최종 레시피 생성 |
+
+**`POST /recipe/candidate` 응답 예시**
+```json
+{
+  "status": "ready",
+  "recipe_ref": "동남아식_면류_팟타이",
+  "menu": "팟타이",
+  "needs_spice": true,
+  "needs_doneness": false,
+  "spice_options": ["순한맛", "매운맛"],
+  "doneness_options": [],
+  "substitutions": { "새우": "돼지고기", "피시소스": "멸치액젓" }
+}
+```
+
+**`POST /recipe/generate` 응답 예시**
+```json
+{
+  "status": "done",
+  "menu": "팟타이",
+  "ingredients": ["쌀국수", "돼지고기", "계란", "숙주", "다진마늘", "멸치액젓", "설탕", "식용유", "고춧가루", "청양고추"],
+  "steps": "...",
+  "score": 7,
+  "feedback": {
+    "score": 7,
+    "comment": "조리 순서가 구체적이고 따라하기 쉬움",
+    "issues": [],
+    "suggestions": ["양념의 양과 맛의 조절법에 대해 더 자세히 설명하는 것이 도움이 될 것"]
+  }
+}
+```
+
+## 데이터 설계
+
+### 재료 / 조리도구 (MySQL, `ingredients` 테이블)
 
 ```python
 class Ingredients(Base):
     __tablename__ = "ingredients"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(255), nullable=False)
-    category = Column(String(100), nullable=False)
-    type = Column(String(100), nullable=False)
-    owned = Column(Boolean, default=False)
+    name = Column(String(255))
+    category = Column(String(100))
+    type = Column(String(100))       # 토글 UI 그룹핑 기준 (조미료/채소/조리도구 등)
+    owned = Column(Boolean, default=False, nullable=False)
 ```
 
+조리도구도 같은 테이블에 `category="조리도구"`로 저장해서, 재료와 동일한 토글 UI/보유 여부 로직을 그대로 재사용합니다.
 
-### 레시피 원본 문서 (Vector DB, MySQL 아님)
+### 레시피 문서 (`backend/recipes/<cuisine>/<dish_type>/<menu>.md`)
 
-MySQL이 아니라 Chroma 등 벡터DB에 별도 저장. 필드 구조는 아래 "레시피 문서 설계" 참고.
-
----
-
-## API 명세 (FastAPI)
-
-### 재료 관련
-
-| Method | Endpoint | 설명 |
-|---|---|---|
-| GET | `/ingredients` | 전체 재료 목록 조회 (type별 그룹핑해서 반환 권장) |
-| PATCH | `/ingredients/{id}` | 특정 재료의 `owned` 토글 |
-| GET | `/ingredients/owned` | 보유 중(`owned=True`)인 재료만 조회 |
-
-**`PATCH /ingredients/{id}` 요청 예시**
-```json
-{ "owned": true }
-```
-
-### 카테고리 관련
-
-| Method | Endpoint | 설명 |
-|---|---|---|
-| GET | `/categories` | 선택 가능한 카테고리 목록 (한식/중식/양식, 면류/밥류 등 고정값이면 하드코딩도 무방) |
-
-### 레시피 생성 파이프라인
-
-파이프라인 전체를 하나의 엔드포인트로 묶을지, 단계별로 나눌지는 프론트 로딩 UI 구현 방식에 따라 결정.
-
-**옵션 A: 단일 엔드포인트 (동기, 서버가 전체 그래프 실행 후 최종 결과만 반환)**
-
-| Method | Endpoint | 설명 |
-|---|---|---|
-| POST | `/recipe/generate` | 보유 재료 + 카테고리로 전체 파이프라인 실행, 최종 레시피+점수 반환 |
-
-```json
-// Request
-{ "category": { "cuisine": "양식", "type": "면류" } }
-
-// Response
-{
-  "status": "done",
-  "menu": "토마토파스타",
-  "recipe": { "ingredients": [...], "steps": "..." },
-  "substitutions": { "생크림": "우유+버터" },
-  "score": 8.2,
-  "feedback": { "issues": [], "suggestions": [] }
-}
-```
-
-## LangGraph State 스키마 (예상)
-
-```python
-from typing import TypedDict
-
-class RecipeState(TypedDict):
-    user_inventory: list[str]        # 보유 재료
-    category_filter: dict            # {"cuisine": "양식", "dish_type": "면류"}
-
-    matched_menu: dict               # RAG 검색으로 확정된 메뉴/레시피
-    substitutions: dict              # 확정된 대체 재료 매핑
-
-    generated_recipe: dict           # 요리사 에이전트 출력
-    critic_feedback: dict            # {score, issues, suggestions}
-
-    retry_done: bool                 # 재생성 1회 소진 여부
-    status: str                      # "checking_ingredients" / "generating" /
-                                      # "reviewing" / "done" / "no_candidate"
-```
-
----
-
-## 데이터 설계
-
-### 재료 DB
-- 사용자가 토글로 입력한 재료를 카테고리로 태깅해서 저장
-- 예: 라면사리 / 우동사리 / 밀면사리 → `면류`
-- 목적: 대체 재료 후보를 코드로 빠르게 조회 (LLM 호출 없이)
-
-### 레시피 문서 (벡터DB, 구조화 저장)
+MySQL이 아니라 마크다운 파일로 관리 (YAML frontmatter + 자유 텍스트 조리방법). `crud/recipe.py`가 실행 시점에 전체 파일을 읽어 `cuisine`/`dish_type` 필드 기준으로 필터링합니다.
 
 | 필드 | 내용 |
 |---|---|
-| `category` | 한식/중식/양식, 면류/밥류 등 (검색 필터용) |
 | `base_ingredients` | 기본 재료 목록 |
 | `substitution_table` | 재료별 대체 가능 품목 |
-| `spice_level_table` | 맵기 단계별 재료 양 |
-| `steps` | 조리 순서 (자유 텍스트) |
+| `spice_level_table` | 맵기 단계별 재료/양 |
+| `doneness_table` | 굽기 단계별 시간/온도 (nullable) |
+| `main_tool` | 필수 조리도구 |
 
-자유 텍스트로 통째로 저장하지 않고 필드별로 구조화하여, 필요한 정보만 선택적으로 검색하고 할루시네이션 위험을 줄임.
-또한 정보 검색 시 불필요한 낭비를 줄임 (예: 사용자가 맵기를 선택 안 한다면 `spice_level_table` 필드를 조회 안 함).
-
-## 역할 분리 원칙
+## 역할 분리
 
 | 코드(결정론적)가 처리 | LLM이 처리 |
 |---|---|
-| 재고 수량 대조 | 대체재의 맛 적합성 최종 판단 |
-| 카테고리 기반 대체 후보 조회 | 레시피 생성, 맵기 조정 |
-| 임계값 기반 재시도 여부 판단 | 미식가 평가 및 피드백 생성 |
+| 재고·조리도구 보유 대조 | 레시피 생성 (요리사 에이전트) |
+| 대체 재료 후보 조회 (substitution_table) | 레시피 전반적인 완성도 평가 (미식가 에이전트) |
+| 맵기 재료 언급 여부 / 굽기 시간·온도 반영 여부 / 대체재 반영 여부 검증 | — |
+| 임계값·검증 결과 기반 재시도 여부 판단 | — |
 
-## MVP 범위 (추후 개선 예정)
-
-이번 버전에서 **의도적으로 제외**한 것들 (추후 확장 가능성으로 남겨둠):
-
-- 메뉴 후보 여러 개를 순회하며 탈락시키는 로직 → 후보 1개만 확정
-- RAG를 2단계(메뉴 탐색용 / 세부 규칙 참조용)로 나누는 구조 → 1단계로 통합 (검색 시 필요 필드 한 번에 조회)
-- 미식가 평가 후 무제한 재시도 → 1회로 제한
-- 메뉴판 이미지 인식(멀티모달)
-- 사용자 식단 히스토리 기반 개인화
-- SSE 기반 단계별 진행상황 스트리밍 (`/recipe/generate/stream`)
-- `recipe_sessions` 히스토리 저장
-
-## To-Do
-
-- [x] 재료 카테고리 태깅 테이블 설계 및 시드 데이터 작성
-- [x] `GET /ingredients`, `PATCH /ingredients/{id}` API 구현
-- [x] 레시피 문서 5~10개 작성 (양식/한식/중식 각 2~3개, 커스터마이징 옵션 포함)
-- [ ] 벡터 DB 구축 및 카테고리 필터 검색 테스트
-- [ ] 요리사 에이전트 프롬프트 설계
-- [ ] 미식가 에이전트 프롬프트 설계 (score/issues/suggestions 구조화 출력)
-- [ ] LangGraph 그래프 구성 (노드/조건부 엣지)
-- [ ] `POST /recipe/generate` 엔드포인트 구현
-- [ ] 토글 UI 및 결과 표시 화면 구현 (React)
-- [ ] 엔드투엔드 테스트 (재료 부족 케이스, 저품질 재생성 케이스 포함)
+레시피 생성 결과가 지시(필수 재료 언급, 대체재 반영 등)를 지켰는지는 LLM 자체 판단에 맡기지 않고 문자열 검증으로 코드가 직접 확인합니다 — 미식가 에이전트가 이 판단을 종종 틀리게 내리는 걸 확인했기 때문입니다.
