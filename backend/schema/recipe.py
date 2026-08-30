@@ -28,6 +28,7 @@ class GenerateRequest(BaseModel):
 # 미식가 평가
 class CriticFeedback(BaseModel):
     score: float
+    comment: str = ""
     issues: list[str] = []
     suggestions: list[str] = []
 

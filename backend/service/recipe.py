@@ -64,6 +64,7 @@ class RecipeService:
                 "score": feedback.get("score"),
                 "feedback": {
                     "score": feedback.get("score"),
+                    "comment": feedback.get("comment", ""),
                     "issues": feedback.get("issues", []),
                     "suggestions": feedback.get("suggestions", []),
                 },
