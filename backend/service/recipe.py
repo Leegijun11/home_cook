@@ -19,22 +19,55 @@ class RecipeService:
         candidates = RecipeCrud.find_matching_recipes(category.cuisine, category.dish_type)
 
         for recipe in candidates:
-            base_ingredients = set(recipe.get("base_ingredients") or [])
-            if base_ingredients <= owned_names:
-                spice_level_table = recipe.get("spice_level_table")
-                doneness_table = recipe.get("doneness_table")
+            substitutions = RecipeService._resolve_substitutions(recipe, owned_names)
+            if substitutions is None:
+                continue
 
-                return {
-                    "status": "ready",
-                    "recipe_ref": recipe["recipe_ref"],
-                    "menu": recipe.get("name"),
-                    "needs_spice": spice_level_table is not None,
-                    "needs_doneness": doneness_table is not None,
-                    "spice_options": list(spice_level_table.keys()) if spice_level_table else [],
-                    "doneness_options": list(doneness_table.keys()) if doneness_table else [],
-                }
+            spice_level_table = recipe.get("spice_level_table")
+            doneness_table = recipe.get("doneness_table")
+            spice_options = RecipeService._available_spice_levels(spice_level_table, owned_names)
+
+            return {
+                "status": "ready",
+                "recipe_ref": recipe["recipe_ref"],
+                "menu": recipe.get("name"),
+                "needs_spice": len(spice_options) > 0,
+                "needs_doneness": doneness_table is not None,
+                "spice_options": spice_options,
+                "doneness_options": list(doneness_table.keys()) if doneness_table else [],
+                "substitutions": substitutions,
+            }
 
         return {"status": "no_candidate"}
+
+    @staticmethod
+    def _resolve_substitutions(recipe: dict, owned_names: set):
+        """base_ingredients 중 없는 것마다 substitution_table에서 보유한 대체재를 찾는다.
+
+        하나라도 원본도 대체재도 없으면 이 레시피는 지금 재료로 불가능한 것이므로 None을 반환.
+        """
+        substitution_table = recipe.get("substitution_table") or {}
+        substitutions = {}
+        for ingredient in recipe.get("base_ingredients") or []:
+            if ingredient in owned_names:
+                continue
+            alternatives = substitution_table.get(ingredient) or []
+            replacement = next((alt for alt in alternatives if alt in owned_names), None)
+            if replacement is None:
+                return None
+            substitutions[ingredient] = replacement
+        return substitutions
+
+    @staticmethod
+    def _available_spice_levels(spice_level_table, owned_names: set):
+        """맵기 단계 중, 그 단계에서 실제로 필요한 재료(양이 '0'이 아닌 것)를 전부
+        보유하고 있는 단계만 골라서 반환. 하나도 없으면 빈 리스트(=맵기 선택 자체를 숨김)."""
+        if not spice_level_table:
+            return []
+        return [
+            level for level, overrides in spice_level_table.items()
+            if all(name in owned_names for name, amount in overrides.items() if amount != "0")
+        ]
 
     @staticmethod
     def generate(payload: GenerateRequest):
@@ -51,7 +84,9 @@ class RecipeService:
             raise HTTPException(status_code=400, detail="Error: 유효하지 않은 굽기 단계")
 
         try:
-            generated, feedback = recipe_graph.run(recipe, payload.spice_level, payload.doneness)
+            generated, feedback = recipe_graph.run(
+                recipe, payload.spice_level, payload.doneness, payload.substitutions
+            )
         except Exception as e:
             raise HTTPException(status_code=502, detail="Error: 레시피 생성 요청이 실패함") from e
 

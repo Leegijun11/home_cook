@@ -17,6 +17,8 @@ COOK_SYSTEM_PROMPT = (
     '- 금지 표현 예시: "매운맛을 낸다", "매콤하게 볶는다", "고춧가루를 넣어 마무리한다" (수치 없음)\n'
     '- 올바른 예시: "고추장 2큰술과 고춧가루 1큰술을 넣어 매운맛을 낸다"\n'
     "- [필수 분량]이 없는 재료는 기본 레시피의 표현을 그대로 유지해도 돼.\n"
+    "- [대체 재료]가 주어지면 원래 재료 대신 그 대체 재료 이름을 ingredients와 steps에 사용해. "
+    "원래 재료 이름은 결과에 남기지 마.\n"
     "- 반드시 아래 JSON 형식으로만 응답해. 다른 설명, 마크다운, 코드블록은 포함하지 마.\n"
     '{"menu": "메뉴명", "ingredients": ["재료명 또는 재료명+분량", ...], "steps": "조리 순서 설명"}'
 )
@@ -41,6 +43,7 @@ class RecipeState(TypedDict):
     recipe: dict
     spice_level: Optional[str]
     doneness: Optional[str]
+    substitutions: dict[str, str]
     generated_recipe: dict
     critic_feedback: dict
     missing_amounts: list[str]
@@ -70,6 +73,13 @@ def _required_amounts_text(recipe: dict, spice_level: Optional[str], doneness: O
         lines += [f"선택한 굽기 단계: {doneness}", f"[필수 분량] {override_text}"]
 
     return "\n".join(lines)
+
+
+def _substitutions_text(substitutions: dict):
+    if not substitutions:
+        return ""
+    lines = [f"{original} 대신 {replacement} 사용" for original, replacement in substitutions.items()]
+    return "[대체 재료] (원래 재료 대신 반드시 이걸 사용):\n" + "\n".join(lines)
 
 
 def _amount_tokens(amount: str):
@@ -120,6 +130,8 @@ def generate_node(state: RecipeState):
         "기본 조리방법:",
         recipe.get("steps") or "",
         "",
+        _substitutions_text(state.get("substitutions") or {}),
+        "",
         _required_amounts_text(recipe, state["spice_level"], state["doneness"]),
     ])
     generated = _call_llm(COOK_SYSTEM_PROMPT, prompt)
@@ -148,6 +160,8 @@ def regenerate_node(state: RecipeState):
         f"메뉴: {recipe.get('name')}",
         f"기본 재료: {', '.join(recipe.get('base_ingredients') or [])}",
         f"주 조리도구: {recipe.get('main_tool')}",
+        "",
+        _substitutions_text(state.get("substitutions") or {}),
         "",
         _required_amounts_text(recipe, state["spice_level"], state["doneness"]),
         "",
@@ -187,11 +201,12 @@ def _build_graph():
 recipe_graph = _build_graph()
 
 
-def run(recipe: dict, spice_level: Optional[str], doneness: Optional[str]):
+def run(recipe: dict, spice_level: Optional[str], doneness: Optional[str], substitutions: Optional[dict] = None):
     initial_state: RecipeState = {
         "recipe": recipe,
         "spice_level": spice_level,
         "doneness": doneness,
+        "substitutions": substitutions or {},
         "generated_recipe": {},
         "critic_feedback": {},
         "missing_amounts": [],

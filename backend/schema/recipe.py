@@ -16,6 +16,7 @@ class CandidateResponse(BaseModel):
     needs_doneness: bool = False
     spice_options: list[str] = []
     doneness_options: list[str] = []
+    substitutions: dict[str, str] = {}
 
 
 # 레시피 생성 요청
@@ -23,6 +24,7 @@ class GenerateRequest(BaseModel):
     recipe_ref: str
     spice_level: Optional[str] = None
     doneness: Optional[str] = None
+    substitutions: dict[str, str] = {}
 
 
 # 미식가 평가
