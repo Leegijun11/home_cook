@@ -115,42 +115,104 @@
     font-size: 14px;
 }
 
-.result-steps {
-    font-size: 15px;
-    line-height: 1.7;
-    color: #333;
-    white-space: pre-wrap;
-    word-break: break-word;
+.result-steps-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: step-counter;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
 }
 
-.result-score {
-    font-size: 20px;
+.result-steps-item {
+    position: relative;
+    padding: 2px 0 2px 36px;
+    font-size: 15px;
+    line-height: 1.6;
+    color: #333;
+    word-break: break-word;
+    counter-increment: step-counter;
+}
+
+.result-steps-item::before {
+    content: counter(step-counter);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: #4caf50;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.result-feedback-card {
+    background-color: #f7faf7;
+    border: 1px solid #e3efe3;
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.result-score-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.result-score-badge {
+    font-size: 26px;
     font-weight: 700;
     color: #4caf50;
-    margin: 0 0 8px;
+}
+
+.result-score-max {
+    font-size: 14px;
+    color: #888;
 }
 
 .result-comment {
     font-size: 14px;
-    color: #555;
-    margin: 0 0 12px;
+    line-height: 1.6;
+    color: #444;
+    margin: 0;
 }
 
 .result-feedback-group {
-    margin-top: 12px;
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border-left: 4px solid #ddd;
+    background-color: #fafafa;
+}
+
+.result-feedback-group:has(.result-feedback-label.issue) {
+    border-left-color: #f0a04b;
+    background-color: #fff8f0;
+}
+
+.result-feedback-group:has(.result-feedback-label.suggestion) {
+    border-left-color: #4caf50;
+    background-color: #f3faf3;
 }
 
 .result-feedback-label {
     font-size: 14px;
     font-weight: 600;
     color: #555;
-    margin-bottom: 6px;
+    margin: 0 0 8px;
 }
 
 .result-feedback-list {
     margin: 0;
-    padding-left: 20px;
-    color: #666;
+    padding-left: 18px;
+    color: #555;
     font-size: 14px;
-    line-height: 1.6;
+    line-height: 1.7;
 }

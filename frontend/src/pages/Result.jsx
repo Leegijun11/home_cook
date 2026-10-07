@@ -7,6 +7,13 @@ import "../style/Result.css"
 
 const toOptions = (values = []) => values.map((value) => ({ id: value, label: value }))
 
+// steps 문자열("1. ... \n2. ...")을 번호 없이 단계별 텍스트 배열로 분리
+const parseSteps = (steps) =>
+    (steps ?? "")
+        .split("\n")
+        .map((line) => line.trim().replace(/^\d+\.\s*/, ""))
+        .filter(Boolean)
+
 export default function Result() {
     const location = useLocation()
     const navigate = useNavigate()
@@ -166,18 +173,34 @@ export default function Result() {
 
             <div className="result-section">
                 <h3 className="result-section-title">조리 순서</h3>
-                <p className="result-steps">{recipe?.steps}</p>
+                <ol className="result-steps-list">
+                    {parseSteps(recipe?.steps).map((step, index) => (
+                        <li key={index} className="result-steps-item">
+                            {step}
+                        </li>
+                    ))}
+                </ol>
             </div>
 
             <div className="result-section">
                 <h3 className="result-section-title">미식가 평가</h3>
-                {recipe?.score != null && <p className="result-score">{recipe.score} / 10</p>}
-                {recipe?.feedback?.comment && <p className="result-comment">{recipe.feedback.comment}</p>}
+
+                <div className="result-feedback-card">
+                    {recipe?.score != null && (
+                        <div className="result-score-row">
+                            <span className="result-score-badge">{recipe.score}</span>
+                            <span className="result-score-max">/ 10</span>
+                        </div>
+                    )}
+                    {recipe?.feedback?.comment && (
+                        <p className="result-comment">{recipe.feedback.comment}</p>
+                    )}
+                </div>
 
                 {recipe?.feedback?.issues?.length > 0 && (
                     <div className="result-feedback-group">
-                        <p className="result-feedback-label">문제점</p>
-                        <ul className="result-feedback-list">
+                        <p className="result-feedback-label issue">문제점</p>
+                        <ul className="result-feedback-list issue">
                             {recipe.feedback.issues.map((issue) => (
                                 <li key={issue}>{issue}</li>
                             ))}
@@ -187,8 +210,8 @@ export default function Result() {
 
                 {recipe?.feedback?.suggestions?.length > 0 && (
                     <div className="result-feedback-group">
-                        <p className="result-feedback-label">개선 제안</p>
-                        <ul className="result-feedback-list">
+                        <p className="result-feedback-label suggestion">개선 제안</p>
+                        <ul className="result-feedback-list suggestion">
                             {recipe.feedback.suggestions.map((suggestion) => (
                                 <li key={suggestion}>{suggestion}</li>
                             ))}
