@@ -31,6 +31,7 @@ class GenerateRequest(BaseModel):
 class CriticFeedback(BaseModel):
     score: float
     comment: str = ""
+    strengths: list[str] = []
     issues: list[str] = []
     suggestions: list[str] = []
 

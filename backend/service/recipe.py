@@ -121,6 +121,7 @@ class RecipeService:
                 "feedback": {
                     "score": feedback.get("score"),
                     "comment": feedback.get("comment", ""),
+                    "strengths": feedback.get("strengths", []),
                     "issues": feedback.get("issues", []),
                     "suggestions": feedback.get("suggestions", []),
                 },
