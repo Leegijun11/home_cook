@@ -74,10 +74,30 @@
     background: linear-gradient(to top, #fff 70%, transparent);
     display: flex;
     justify-content: center;
+    gap: 10px;
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+.category-back-btn {
+    flex: 0 0 90px;
+    padding: 14px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    background-color: #fff;
+    color: #555;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.category-back-btn:hover {
+    border-color: #4caf50;
+    color: #4caf50;
 }
 
 .category-submit-btn {
-    width: 100%;
+    flex: 1;
     max-width: 680px;
     padding: 14px;
     border: none;

@@ -49,6 +49,9 @@ export default function Category() {
             />
 
             <div className="category-footer">
+                <button className="category-back-btn" onClick={() => navigate("/")}>
+                    뒤로
+                </button>
                 <button
                     className="category-submit-btn"
                     disabled={!canSubmit}

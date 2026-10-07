@@ -70,15 +70,26 @@ export default function Result() {
         return (
             <div className="result-page">
                 <p className="result-message">이 재료로는 어려워요</p>
-                <button className="result-submit-btn" onClick={() => navigate("/category")}>
-                    다시 선택하기
-                </button>
+                <div className="result-footer">
+                    <button className="result-submit-btn" onClick={() => navigate("/category")}>
+                        다시 선택하기
+                    </button>
+                </div>
             </div>
         )
     }
 
     if (status === "error") {
-        return <p className="result-message">{errorMessage}</p>
+        return (
+            <div className="result-page">
+                <p className="result-message">{errorMessage}</p>
+                <div className="result-footer">
+                    <button className="result-submit-btn" onClick={() => navigate("/category")}>
+                        뒤로가기
+                    </button>
+                </div>
+            </div>
+        )
     }
 
     if (status === "awaiting_attributes") {
@@ -110,6 +121,9 @@ export default function Result() {
                 )}
 
                 <div className="result-footer">
+                    <button className="result-back-btn" onClick={() => navigate("/category")}>
+                        뒤로
+                    </button>
                     <button
                         className="result-submit-btn"
                         disabled={!canConfirm}
@@ -181,6 +195,12 @@ export default function Result() {
                         </ul>
                     </div>
                 )}
+            </div>
+
+            <div className="result-footer">
+                <button className="result-submit-btn" onClick={() => navigate("/")}>
+                    다른 레시피 생성하기
+                </button>
             </div>
         </div>
     )
