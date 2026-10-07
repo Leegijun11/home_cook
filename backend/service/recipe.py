@@ -4,6 +4,7 @@ from crud.ingredients import IngredientCrud
 from crud.recipe import RecipeCrud
 from schema.recipe import GenerateRequest
 from service import recipe_graph
+from service import query_normalizer
 from vectorstore import chroma_store
 from fastapi import HTTPException
 
@@ -23,11 +24,13 @@ class RecipeService:
 
     @staticmethod
     def search_candidate(query: str, db: Session):
-        """자연어 쿼리로 ChromaDB에서 의미적으로 가까운 레시피를 찾고,
-        그중 지금 보유한 재료·도구로 실제로 만들 수 있는 첫 번째 후보를 반환한다."""
+        """자연어 쿼리를 LLM으로 짧은 검색어로 정리한 뒤 ChromaDB에서 의미적으로
+        가까운 레시피를 찾고, 그중 지금 보유한 재료·도구로 실제로 만들 수 있는
+        첫 번째 후보를 반환한다."""
         owned_names = {ingredient.name for ingredient in IngredientCrud.get_owned_ingredients(db)}
 
-        ranked_refs = chroma_store.search(query, n_results=10)
+        normalized_query = query_normalizer.normalize_query(query)
+        ranked_refs = chroma_store.search(normalized_query, n_results=10)
         candidates = [RecipeCrud.get_by_ref(ref) for ref in ranked_refs]
         candidates = [recipe for recipe in candidates if recipe is not None]
 
