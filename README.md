@@ -61,7 +61,7 @@ venv\Scripts\activate
 uvicorn main:app --reload
 ```
 
-`backend/.env`에 `OPENAI_API_KEY`, `OPENAI_MODEL`(기본 gpt-3.5-turbo)을 설정해야 합니다. MySQL 접속 정보는 `backend/database.py`에 있습니다.
+`backend/.env`에 `OPENAI_API_KEY`, `OPENAI_MODEL`(기본 gpt-5-mini)을 설정해야 합니다. MySQL 접속 정보는 `backend/database.py`에 있습니다.
 
 ### Frontend
 
