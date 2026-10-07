@@ -154,7 +154,6 @@ def _substitution_violations(substitutions: dict, generated: dict):
 def _call_llm(system_prompt: str, user_prompt: str):
     completion = client.chat.completions.create(
         model=settings.openai_model,
-        temperature=0,
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": system_prompt},
