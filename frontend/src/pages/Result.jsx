@@ -195,28 +195,42 @@ export default function Result() {
                     {recipe?.feedback?.comment && (
                         <p className="result-comment">{recipe.feedback.comment}</p>
                     )}
+
+                    {recipe?.feedback?.strengths?.length > 0 && (
+                        <ul className="result-strengths-list">
+                            {recipe.feedback.strengths.map((strength) => (
+                                <li key={strength}>{strength}</li>
+                            ))}
+                        </ul>
+                    )}
                 </div>
 
-                {recipe?.feedback?.issues?.length > 0 && (
-                    <div className="result-feedback-group">
-                        <p className="result-feedback-label issue">문제점</p>
-                        <ul className="result-feedback-list issue">
-                            {recipe.feedback.issues.map((issue) => (
-                                <li key={issue}>{issue}</li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
+                {(recipe?.feedback?.issues?.length > 0 || recipe?.feedback?.suggestions?.length > 0) && (
+                    <details className="result-feedback-more">
+                        <summary>아쉬운 점 / 개선 제안 보기</summary>
 
-                {recipe?.feedback?.suggestions?.length > 0 && (
-                    <div className="result-feedback-group">
-                        <p className="result-feedback-label suggestion">개선 제안</p>
-                        <ul className="result-feedback-list suggestion">
-                            {recipe.feedback.suggestions.map((suggestion) => (
-                                <li key={suggestion}>{suggestion}</li>
-                            ))}
-                        </ul>
-                    </div>
+                        {recipe?.feedback?.issues?.length > 0 && (
+                            <div className="result-feedback-group">
+                                <p className="result-feedback-label issue">아쉬운 점</p>
+                                <ul className="result-feedback-list issue">
+                                    {recipe.feedback.issues.map((issue) => (
+                                        <li key={issue}>{issue}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        {recipe?.feedback?.suggestions?.length > 0 && (
+                            <div className="result-feedback-group">
+                                <p className="result-feedback-label suggestion">개선 제안</p>
+                                <ul className="result-feedback-list suggestion">
+                                    {recipe.feedback.suggestions.map((suggestion) => (
+                                        <li key={suggestion}>{suggestion}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </details>
                 )}
             </div>
 
