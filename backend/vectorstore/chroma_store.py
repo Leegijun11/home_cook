@@ -24,13 +24,16 @@ def _get_collection():
 def rebuild_index(recipes: list[dict]) -> int:
     """recipes 전체를 받아 embedding_text가 있는 것만 다시 색인한다.
 
-    매번 전체 삭제 후 새로 넣는다 — 레시피 수가 수백 개 수준이라 증분 업데이트보다
-    단순하고, recipe_ref가 바뀌거나 삭제된 레시피가 남아있는 문제도 피할 수 있다.
+    컬렉션 자체를 지우고 새로 만든다 — 문서만 지우는 걸로는 부족하다. Chroma
+    컬렉션은 처음 만들어질 때의 임베딩 차원이 고정되기 때문에, embedding_model을
+    바꿔서 차원 수가 달라지면(예: small=1536, large=3072) 기존 컬렉션에 그냥
+    넣으려고 할 때 InvalidArgumentError가 난다.
     """
+    try:
+        _chroma_client.delete_collection(name=COLLECTION_NAME)
+    except Exception:
+        pass  # 컬렉션이 아직 없으면 그냥 넘어감
     collection = _get_collection()
-    existing_ids = collection.get()["ids"]
-    if existing_ids:
-        collection.delete(ids=existing_ids)
 
     targets = [r for r in recipes if r.get("embedding_text")]
     if not targets:
