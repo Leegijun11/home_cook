@@ -48,6 +48,10 @@ export default function Category() {
                 onSelect={setSelectedDishType}
             />
 
+            <p className="category-search-link" onClick={() => navigate("/search")}>
+                또는 어떤 느낌의 음식이 먹고 싶은지 글로 찾아볼까요? →
+            </p>
+
             <div className="category-footer">
                 <button className="category-back-btn" onClick={() => navigate("/")}>
                     뒤로

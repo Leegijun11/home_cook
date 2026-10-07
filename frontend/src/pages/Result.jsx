@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import CategoryGroup from "../components/CategoryGroup"
-import { get_recipe_candidate, generate_recipe } from "../service/recipe"
+import { get_recipe_candidate, search_recipe_candidate, generate_recipe } from "../service/recipe"
 import "../style/Category.css"
 import "../style/Result.css"
 
@@ -18,6 +18,8 @@ export default function Result() {
     const location = useLocation()
     const navigate = useNavigate()
     const categoryId = location.state?.categoryId
+    const query = location.state?.query
+    const backPath = query ? "/search" : "/category"
 
     const [status, setStatus] = useState("checking_candidate")
     const [candidate, setCandidate] = useState(null)
@@ -27,12 +29,16 @@ export default function Result() {
     const [errorMessage, setErrorMessage] = useState(null)
 
     useEffect(() => {
-        if (!categoryId) {
+        if (!categoryId && !query) {
             navigate("/category")
             return
         }
 
-        get_recipe_candidate(categoryId)
+        const fetchCandidate = query
+            ? search_recipe_candidate(query)
+            : get_recipe_candidate(categoryId)
+
+        fetchCandidate
             .then((data) => {
                 if (data.status === "no_candidate") {
                     setStatus("no_candidate")
@@ -47,7 +53,7 @@ export default function Result() {
                 setErrorMessage("후보 레시피를 확인하지 못했어요")
                 setStatus("error")
             })
-    }, [categoryId, navigate])
+    }, [categoryId, query, navigate])
 
     useEffect(() => {
         if (status !== "generating" || !candidate) return
@@ -78,7 +84,7 @@ export default function Result() {
             <div className="result-page">
                 <p className="result-message">이 재료로는 어려워요</p>
                 <div className="result-footer">
-                    <button className="result-submit-btn" onClick={() => navigate("/category")}>
+                    <button className="result-submit-btn" onClick={() => navigate(backPath)}>
                         다시 선택하기
                     </button>
                 </div>
@@ -91,7 +97,7 @@ export default function Result() {
             <div className="result-page">
                 <p className="result-message">{errorMessage}</p>
                 <div className="result-footer">
-                    <button className="result-submit-btn" onClick={() => navigate("/category")}>
+                    <button className="result-submit-btn" onClick={() => navigate(backPath)}>
                         뒤로가기
                     </button>
                 </div>
@@ -128,7 +134,7 @@ export default function Result() {
                 )}
 
                 <div className="result-footer">
-                    <button className="result-back-btn" onClick={() => navigate("/category")}>
+                    <button className="result-back-btn" onClick={() => navigate(backPath)}>
                         뒤로
                     </button>
                     <button

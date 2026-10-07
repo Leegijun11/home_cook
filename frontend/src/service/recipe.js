@@ -5,6 +5,11 @@ export const get_recipe_candidate = async (categoryId) => {
     return response.data
 }
 
+export const search_recipe_candidate = async (query) => {
+    const response = await api.post("/recipe/search", { query })
+    return response.data
+}
+
 export const generate_recipe = async ({ recipe_ref, spice_level, doneness, substitutions }) => {
     const response = await api.post("/recipe/generate", { recipe_ref, spice_level, doneness, substitutions })
     return response.data

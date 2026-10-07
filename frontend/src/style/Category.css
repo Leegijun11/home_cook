@@ -65,6 +65,18 @@
     color: #fff;
 }
 
+.category-search-link {
+    text-align: center;
+    font-size: 13px;
+    color: #4caf50;
+    cursor: pointer;
+    margin: -8px 0 24px;
+}
+
+.category-search-link:hover {
+    text-decoration: underline;
+}
+
 .category-footer {
     position: fixed;
     left: 0;
