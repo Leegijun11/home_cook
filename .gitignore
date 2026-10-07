@@ -35,6 +35,9 @@ __pycache__/
 *.db
 *.sqlite3
 
+# 벡터 인덱스 (build_index.py로 재생성 가능)
+backend/chroma_db/
+
 # 비밀키 (API 키 등)
 .env
 !.env.example
