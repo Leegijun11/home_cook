@@ -19,12 +19,14 @@ class RecipeService:
         candidates = RecipeCrud.find_matching_recipes(category.cuisine, category.dish_type)
 
         for recipe in candidates:
-            if recipe.get("main_tool") not in owned_names:
+            tool_substitution = RecipeService._resolve_tool(recipe, owned_names)
+            if tool_substitution is None:
                 continue
 
             substitutions = RecipeService._resolve_substitutions(recipe, owned_names)
             if substitutions is None:
                 continue
+            substitutions = {**substitutions, **tool_substitution}
 
             spice_level_table = recipe.get("spice_level_table")
             doneness_table = recipe.get("doneness_table")
@@ -42,6 +44,22 @@ class RecipeService:
             }
 
         return {"status": "no_candidate"}
+
+    @staticmethod
+    def _resolve_tool(recipe: dict, owned_names: set):
+        """main_tool을 보유하고 있으면 그대로, 없으면 alt_tools 중 보유한 것을 찾는다.
+
+        main_tool도 alt_tools도 보유하지 못했으면 이 레시피는 지금 조리도구로 불가능한
+        것이므로 None을 반환. 대체가 필요 없으면 빈 dict, 대체했으면 {main_tool: 대체도구}.
+        """
+        main_tool = recipe.get("main_tool")
+        if main_tool in owned_names:
+            return {}
+        alt_tools = recipe.get("alt_tools") or []
+        replacement = next((tool for tool in alt_tools if tool in owned_names), None)
+        if replacement is None:
+            return None
+        return {main_tool: replacement}
 
     @staticmethod
     def _resolve_substitutions(recipe: dict, owned_names: set):

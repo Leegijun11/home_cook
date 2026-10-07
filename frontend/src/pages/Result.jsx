@@ -135,7 +135,7 @@ export default function Result() {
                     {Object.entries(candidate.substitutions)
                         .map(([original, replacement]) => `${original} → ${replacement}`)
                         .join(", ")}{" "}
-                    대체 재료로 만들었어요
+                    로 대체해서 만들었어요
                 </p>
             )}
 

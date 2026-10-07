@@ -19,8 +19,8 @@ COOK_SYSTEM_PROMPT = (
     "적을 필요는 없어 — '고춧가루를 넣어 매운맛을 낸다'처럼 자연스럽게 언급만 하면 충분해.\n"
     "- [필수 분량](굽기 단계별 시간/온도)은 절대 임의로 바꾸거나 뭉뚱그리지 마. steps 문장 안에 그 "
     "수치를 그대로 적어.\n"
-    "- [대체 재료]가 주어지면 그건 다른 규칙보다 우선이야. 원래 재료 이름은 ingredients와 steps 어디에도 "
-    "단 한 글자도 남기지 말고, 전부 대체 재료 이름으로 바꿔서 써.\n"
+    "- [대체 재료/도구]가 주어지면 그건 다른 규칙보다 우선이야. 원래 이름(재료든 조리도구든)은 "
+    "ingredients와 steps 어디에도 단 한 글자도 남기지 말고, 전부 대체한 이름으로 바꿔서 써.\n"
     "- steps는 처음부터 끝까지 자연스럽게 이어지는 하나의 조리 순서여야 해. 같은 내용이나 비슷한 문장을 "
     "두 번 반복해서 쓰지 마.\n"
     "- 반드시 아래 JSON 형식으로만 응답해. 다른 설명, 마크다운, 코드블록은 포함하지 마.\n"
@@ -88,7 +88,12 @@ def _substitutions_text(substitutions: dict):
     if not substitutions:
         return ""
     lines = [f"{original} 대신 {replacement} 사용" for original, replacement in substitutions.items()]
-    return "[대체 재료] (원래 재료 대신 반드시 이걸 사용):\n" + "\n".join(lines)
+    return "[대체 재료/도구] (원래 것 대신 반드시 이걸 사용):\n" + "\n".join(lines)
+
+
+def _resolved_main_tool(recipe: dict, substitutions: dict):
+    main_tool = recipe.get("main_tool")
+    return substitutions.get(main_tool, main_tool)
 
 
 def _amount_tokens(amount: str):
@@ -156,22 +161,23 @@ def _call_llm(system_prompt: str, user_prompt: str):
 
 def generate_node(state: RecipeState):
     recipe = state["recipe"]
+    substitutions = state.get("substitutions") or {}
     prompt = "\n".join([
         f"메뉴: {recipe.get('name')}",
         f"기본 재료: {', '.join(recipe.get('base_ingredients') or [])}",
-        f"주 조리도구: {recipe.get('main_tool')}",
+        f"주 조리도구: {_resolved_main_tool(recipe, substitutions)}",
         "",
         "기본 조리방법:",
         recipe.get("steps") or "",
         "",
-        _substitutions_text(state.get("substitutions") or {}),
+        _substitutions_text(substitutions),
         "",
         _required_amounts_text(recipe, state["spice_level"], state["doneness"]),
     ])
     generated = _call_llm(COOK_SYSTEM_PROMPT, prompt)
     missing_ingredients = _missing_required_ingredients(recipe, state["spice_level"], generated.get("steps"))
     missing_amounts = _missing_required_amounts(recipe, state["doneness"], generated.get("steps"))
-    sub_issues = _substitution_violations(state.get("substitutions") or {}, generated)
+    sub_issues = _substitution_violations(substitutions, generated)
     return {
         "generated_recipe": generated,
         "missing_ingredients": missing_ingredients,
@@ -201,6 +207,7 @@ def regenerate_node(state: RecipeState):
     추가로 얹어 generate_node와 동일하게 완전히 새로 작성하게 한다.
     """
     recipe = state["recipe"]
+    substitutions = state.get("substitutions") or {}
 
     mistakes = []
     if state.get("missing_ingredients"):
@@ -208,19 +215,19 @@ def regenerate_node(state: RecipeState):
     if state.get("missing_amounts"):
         mistakes.append(f"필수 분량이 문장에서 빠짐: {', '.join(state['missing_amounts'])}")
     if state.get("substitution_issues"):
-        mistakes.append(f"대체 재료가 제대로 안 바뀜: {', '.join(state['substitution_issues'])}")
+        mistakes.append(f"대체 재료/도구가 제대로 안 바뀜: {', '.join(state['substitution_issues'])}")
     for issue in (state["critic_feedback"].get("issues") or []):
         mistakes.append(issue)
 
     prompt = "\n".join([
         f"메뉴: {recipe.get('name')}",
         f"기본 재료: {', '.join(recipe.get('base_ingredients') or [])}",
-        f"주 조리도구: {recipe.get('main_tool')}",
+        f"주 조리도구: {_resolved_main_tool(recipe, substitutions)}",
         "",
         "기본 조리방법:",
         recipe.get("steps") or "",
         "",
-        _substitutions_text(state.get("substitutions") or {}),
+        _substitutions_text(substitutions),
         "",
         _required_amounts_text(recipe, state["spice_level"], state["doneness"]),
         "",
@@ -231,7 +238,7 @@ def regenerate_node(state: RecipeState):
     generated = _call_llm(COOK_SYSTEM_PROMPT, prompt)
     missing_ingredients = _missing_required_ingredients(recipe, state["spice_level"], generated.get("steps"))
     missing_amounts = _missing_required_amounts(recipe, state["doneness"], generated.get("steps"))
-    sub_issues = _substitution_violations(state.get("substitutions") or {}, generated)
+    sub_issues = _substitution_violations(substitutions, generated)
     return {
         "generated_recipe": generated,
         "missing_ingredients": missing_ingredients,
@@ -289,7 +296,7 @@ def run(recipe: dict, spice_level: Optional[str], doneness: Optional[str], subst
 
     sub_issues = final_state.get("substitution_issues") or []
     if sub_issues:
-        issues = [f"대체 재료 미반영: {', '.join(sub_issues)}"] + issues
+        issues = [f"대체 재료/도구 미반영: {', '.join(sub_issues)}"] + issues
 
     missing_amounts = final_state.get("missing_amounts") or []
     if missing_amounts:
