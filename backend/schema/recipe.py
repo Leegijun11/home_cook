@@ -7,6 +7,11 @@ class CandidateRequest(BaseModel):
     category_id: int
 
 
+# 자연어 검색 기반 레시피 후보 확정 요청
+class SearchRequest(BaseModel):
+    query: str
+
+
 # 레시피 후보 확정 응답
 class CandidateResponse(BaseModel):
     status: str  # "ready" / "no_candidate"

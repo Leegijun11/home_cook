@@ -4,6 +4,7 @@ from crud.ingredients import IngredientCrud
 from crud.recipe import RecipeCrud
 from schema.recipe import GenerateRequest
 from service import recipe_graph
+from vectorstore import chroma_store
 from fastapi import HTTPException
 
 
@@ -18,6 +19,24 @@ class RecipeService:
         owned_names = {ingredient.name for ingredient in IngredientCrud.get_owned_ingredients(db)}
         candidates = RecipeCrud.find_matching_recipes(category.cuisine, category.dish_type)
 
+        return RecipeService._first_makeable(candidates, owned_names) or {"status": "no_candidate"}
+
+    @staticmethod
+    def search_candidate(query: str, db: Session):
+        """자연어 쿼리로 ChromaDB에서 의미적으로 가까운 레시피를 찾고,
+        그중 지금 보유한 재료·도구로 실제로 만들 수 있는 첫 번째 후보를 반환한다."""
+        owned_names = {ingredient.name for ingredient in IngredientCrud.get_owned_ingredients(db)}
+
+        ranked_refs = chroma_store.search(query, n_results=10)
+        candidates = [RecipeCrud.get_by_ref(ref) for ref in ranked_refs]
+        candidates = [recipe for recipe in candidates if recipe is not None]
+
+        return RecipeService._first_makeable(candidates, owned_names) or {"status": "no_candidate"}
+
+    @staticmethod
+    def _first_makeable(candidates: list, owned_names: set):
+        """후보 레시피 목록을 순서대로 보면서, 지금 보유한 재료·도구로 만들 수 있는
+        첫 번째 레시피를 찾아 candidate 응답 형태로 반환한다. 하나도 없으면 None."""
         for recipe in candidates:
             tool_substitution = RecipeService._resolve_tool(recipe, owned_names)
             if tool_substitution is None:
@@ -43,7 +62,7 @@ class RecipeService:
                 "substitutions": substitutions,
             }
 
-        return {"status": "no_candidate"}
+        return None
 
     @staticmethod
     def _resolve_tool(recipe: dict, owned_names: set):
