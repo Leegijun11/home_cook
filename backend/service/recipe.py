@@ -87,7 +87,11 @@ class RecipeService:
     def _resolve_substitutions(recipe: dict, owned_names: set):
         """base_ingredients 중 없는 것마다 substitution_table에서 보유한 대체재를 찾는다.
 
-        하나라도 원본도 대체재도 없으면 이 레시피는 지금 재료로 불가능한 것이므로 None을 반환.
+        대체재 목록에 "생략"/"없이"가 들어간 항목(예: "없이 생략 가능")은 실제 재료가
+        아니라 "이 재료는 선택 사항"이라는 표시다 — 보유한 대체재를 못 찾았어도 이
+        표시가 있으면 그 재료 없이도 만들 수 있는 것으로 보고 통과시킨다(대체재로
+        표시하지도 않음). 그런 표시도 없이 원본도 대체재도 없으면 이 레시피는 지금
+        재료로 불가능한 것이므로 None을 반환.
         """
         substitution_table = recipe.get("substitution_table") or {}
         substitutions = {}
@@ -96,9 +100,12 @@ class RecipeService:
                 continue
             alternatives = substitution_table.get(ingredient) or []
             replacement = next((alt for alt in alternatives if alt in owned_names), None)
-            if replacement is None:
-                return None
-            substitutions[ingredient] = replacement
+            if replacement is not None:
+                substitutions[ingredient] = replacement
+                continue
+            if any("생략" in alt or "없이" in alt for alt in alternatives):
+                continue
+            return None
         return substitutions
 
     @staticmethod
