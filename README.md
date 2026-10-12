@@ -75,7 +75,7 @@
 
 **왜 메타데이터 필터 + 재랭킹인가**: 110개 레시피 규모에서는 벡터 유사도만으로는 "얼큰한 국물"처럼 카테고리를 직접 언급한 쿼리에도 국물류가 아닌 반찬이 끼어드는 문제가 있었습니다. 쿼리가 카테고리를 언급하면 메타데이터 필터로 먼저 좁히고, 그렇게 좁힌 후보들 안에서는 벡터 유사도가 놓치는 미묘한 의도(맛·식감·상황)를 LLM이 설명 텍스트를 직접 읽고 재정렬합니다. BM25 같은 키워드 기반 점수는 레시피 수가 적어 별도 가중합 없이도 LLM 재랭킹 한 번으로 충분하다고 판단해 넣지 않았습니다.
 
-**검색 품질 평가**: `backend/evaluation/`에 고정 평가셋(`eval_cases.py`, 자연어 쿼리 12개 + 정답 레시피)과 평가 스크립트(`run_eval.py`)가 있습니다. 실제 검색 파이프라인(`chroma_store.search` → `reranker.rerank`)을 그대로 돌려 Hit@1/3/5/10, MRR을 계산하고 `eval_history.jsonl`에 기록을 쌓습니다 (재랭킹 적용 전 Hit@1 58% / MRR 0.683 → 적용 후 Hit@1 83% / MRR 0.875).
+**검색 품질 평가**: `backend/evaluation/`에 고정 평가셋(`eval_cases.py`, 자연어 쿼리 12개 + 정답 레시피)과 평가 스크립트(`run_eval.py`)가 있습니다. 실제 검색 파이프라인(`chroma_store.search` → `reranker.rerank`)을 그대로 돌려 Hit@1/3/5/10, MRR을 계산하고 `eval_history.jsonl`에 기록을 쌓습니다 (재랭킹 적용 전 Hit@1 58% / MRR 0.68대 → 적용 후 Hit@1 83% / MRR 0.86대). 재랭킹 호출이 `temperature`를 고정하지 않아 같은 데이터로 다시 돌려도 점수가 소폭(±0.01~0.02) 흔들릴 수 있어 범위로 표기합니다.
 
 ```bash
 cd backend
@@ -179,7 +179,7 @@ class Ingredients(Base):
 
 ### 레시피 문서 (`backend/recipes/<cuisine>/<dish_type>/<menu>.md`)
 
-MySQL이 아니라 마크다운 파일로 관리 (YAML frontmatter + 자유 텍스트 조리방법). `crud/recipe.py`가 실행 시점에 전체 파일을 읽어 `cuisine`/`dish_type` 필드 기준으로 필터링합니다.
+MySQL이 아니라 마크다운 파일로 관리 (YAML frontmatter + 자유 텍스트 조리방법). `crud/recipe.py`가 전체 파일을 읽어 `cuisine`/`dish_type` 필드 기준으로 필터링합니다. 자연어 검색 1회당 재랭킹된 후보(최대 10개) 각각을 `get_by_ref`로 조회하면서 매번 전체 파일을 다시 읽고 파싱하는 게 병목이어서(로컬 측정 약 1.7초), `lru_cache`로 최초 1회만 읽고 `recipe_ref → 레시피` 딕셔너리를 캐싱하도록 바꿨습니다. 레시피 md를 수정하면 서버를 재시작해야 반영됩니다.
 
 | 필드 | 내용 |
 |---|---|
