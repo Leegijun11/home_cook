@@ -22,6 +22,8 @@ except AttributeError:
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import settings
+from crud.recipe import RecipeCrud
+from service import reranker
 from vectorstore import chroma_store
 from evaluation.eval_cases import EVAL_CASES
 
@@ -42,13 +44,18 @@ def run():
     results = []
     for case in EVAL_CASES:
         ranked_refs = chroma_store.search(case["query"], n_results=TOP_K)
-        rank = _first_hit_rank(ranked_refs, case["acceptable_refs"])
+        candidates = [RecipeCrud.get_by_ref(ref) for ref in ranked_refs]
+        candidates = [c for c in candidates if c is not None]
+        candidates = reranker.rerank(case["query"], candidates)
+        reranked_refs = [c["recipe_ref"] for c in candidates]
+
+        rank = _first_hit_rank(reranked_refs, case["acceptable_refs"])
         results.append(
             {
                 "query": case["query"],
                 "note": case["note"],
                 "rank": rank,
-                "top1": ranked_refs[0] if ranked_refs else None,
+                "top1": reranked_refs[0] if reranked_refs else None,
             }
         )
 
@@ -56,7 +63,7 @@ def run():
     hit_at = {k: sum(1 for r in results if r["rank"] is not None and r["rank"] <= k) for k in (1, 3, 5, 10)}
     mrr = sum((1 / r["rank"]) if r["rank"] else 0 for r in results) / n
 
-    print(f"임베딩 모델: {settings.embedding_model}\n")
+    print(f"임베딩 모델: {settings.embedding_model} (재랭킹 적용)\n")
     print(f"{'결과':4}  {'순위':4}  쿼리 (1위로 나온 레시피)")
     print("-" * 70)
     for r in results:
@@ -76,6 +83,7 @@ def run():
                 {
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "embedding_model": settings.embedding_model,
+                    "reranked": True,
                     "n_cases": n,
                     "hit_at_1": hit_at[1] / n,
                     "hit_at_3": hit_at[3] / n,
