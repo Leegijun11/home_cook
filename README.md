@@ -7,7 +7,7 @@
 
 | 재료·조리도구 선택 | 카테고리 선택 | 레시피 결과 |
 |---|---|---|
-| ![재료 선택](images/ingredients.PNG) | ![카테고리 선택](images/category.PNG) | ![결과](images/result.PNG) |
+| ![재료 선택](images/ingredients.PNG) | ![카테고리 선택](images/category1.PNG) | ![결과](images/result1.PNG) |
 
 ## 프로젝트 목적
 
