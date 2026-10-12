@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     openai_api_key: str
+    database_url: str
     openai_model: str = "gpt-5-mini"
     embedding_model: str = "text-embedding-3-large"
     critic_score_threshold: float = 6.0
