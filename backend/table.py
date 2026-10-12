@@ -1,10 +1,12 @@
+from pathlib import Path
+
 import pandas as pd
 from sqlalchemy import select
 from database import SessionLocal
 from model.ingredients import Ingredients
 
-
-df = pd.read_csv(r"C:\Users\lem11\Desktop\home_cook\ingredients_seed.csv")
+CSV_PATH = Path(__file__).resolve().parent.parent / "ingredients_seed.csv"
+df = pd.read_csv(CSV_PATH)
 
 
 print(df["owned"].dtype)
