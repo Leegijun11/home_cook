@@ -43,7 +43,7 @@ def _first_hit_rank(ranked_refs, acceptable_refs):
 def run():
     results = []
     for case in EVAL_CASES:
-        ranked_refs = chroma_store.search(case["query"], n_results=TOP_K)
+        ranked_refs = chroma_store.search_pooled(case["query"])  # 서비스와 같은 후보 풀
         candidates = [RecipeCrud.get_by_ref(ref) for ref in ranked_refs]
         candidates = [c for c in candidates if c is not None]
         candidates = reranker.rerank(case["query"], candidates)
@@ -84,6 +84,7 @@ def run():
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "embedding_model": settings.embedding_model,
                     "reranked": True,
+                    "pooled": True,
                     "n_cases": n,
                     "hit_at_1": hit_at[1] / n,
                     "hit_at_3": hit_at[3] / n,

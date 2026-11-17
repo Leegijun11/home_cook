@@ -24,12 +24,12 @@ class RecipeService:
 
     @staticmethod
     def search_candidate(query: str, db: Session):
-        """자연어 쿼리로 ChromaDB에서 의미적으로 가까운 레시피를 찾고, LLM으로
-        그 후보들을 쿼리에 맞게 재랭킹한 뒤, 그중 지금 보유한 재료·도구로
+        """자연어 쿼리로 벡터 검색(+카테고리 필터)과 키워드 검색의 후보를 한 풀로 모으고,
+        LLM으로 그 후보들을 쿼리에 맞게 재랭킹한 뒤, 그중 지금 보유한 재료·도구로
         실제로 만들 수 있는 첫 번째 후보를 반환한다."""
         owned_names = {ingredient.name for ingredient in IngredientCrud.get_owned_ingredients(db)}
 
-        ranked_refs = chroma_store.search(query, n_results=10)
+        ranked_refs = chroma_store.search_pooled(query)
         candidates = [RecipeCrud.get_by_ref(ref) for ref in ranked_refs]
         candidates = [recipe for recipe in candidates if recipe is not None]
         candidates = reranker.rerank(query, candidates)

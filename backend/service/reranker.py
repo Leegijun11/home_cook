@@ -18,6 +18,13 @@ RERANK_SYSTEM_PROMPT = (
 )
 
 
+def _completion_options() -> dict:
+    """gpt-5 계열(추론 모델)은 순서를 매기는 짧은 판단에서는 추론을 최소로 해도 점수가 같고
+    출력 토큰이 약 1/25, 지연이 약 1/7 로 줄었다 (12쿼리·217쿼리 평가 실험)."""
+    model = settings.openai_model
+    return {"reasoning_effort": "minimal"} if model.startswith("gpt-5") and "chat" not in model else {}
+
+
 def rerank(query: str, candidates: list[dict]) -> list[dict]:
     """임베딩 검색(+카테고리 필터)으로 뽑은 후보들을 LLM이 실제 설명을 읽고 다시 정렬한다.
 
@@ -39,6 +46,7 @@ def rerank(query: str, candidates: list[dict]) -> list[dict]:
         completion = client.chat.completions.create(
             model=settings.openai_model,
             response_format={"type": "json_object"},
+            **_completion_options(),
             messages=[
                 {"role": "system", "content": RERANK_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
